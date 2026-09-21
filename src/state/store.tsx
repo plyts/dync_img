@@ -190,6 +190,7 @@ export interface ProjectStore {
   addShapeObject: (shapeType: "rect" | "ellipse") => ShapeObject;
   addImageObject: (src: string, alt: string) => ImageObject;
   addLineObject: () => LineObject;
+  reorderObject: (id: string, direction: -1 | 1) => void;
   updateObject: (id: string, updater: (o: CanvasObject) => CanvasObject) => void;
   removeObject: (id: string) => void;
   bringObjectToFront: (id: string) => void;
@@ -346,6 +347,21 @@ export function ProjectProvider({
           const item = p.objects.find((o) => o.id === id);
           if (!item) return p;
           return { ...p, objects: [item, ...p.objects.filter((o) => o.id !== id)] };
+        }),
+      reorderObject: (id, direction) =>
+        update((p) => {
+          const sorted = [...p.objects].sort((a, b) => a.order - b.order);
+          const idx = sorted.findIndex((o) => o.id === id);
+          const swapWith = idx + direction;
+          if (idx === -1 || swapWith < 0 || swapWith >= sorted.length) return p;
+          const a = sorted[idx];
+          const b = sorted[swapWith];
+          const objects = p.objects.map((o) => {
+            if (o.id === a.id) return { ...o, order: b.order };
+            if (o.id === b.id) return { ...o, order: a.order };
+            return o;
+          });
+          return { ...p, objects };
         }),
     };
   }, [state, update]);

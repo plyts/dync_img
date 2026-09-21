@@ -10,6 +10,7 @@ import { AIAssistModal } from "./AIAssistModal";
 import { MiniPreview } from "./MiniPreview";
 import { ObjectsLayer } from "./ObjectsLayer";
 import { ObjectInspector } from "./ObjectInspector";
+import { ObjectsList } from "./ObjectsList";
 import { readImageFile, exportProjectJson, readProjectFile, downloadTextFile } from "../../lib/projectIO";
 import { buildStandaloneHtml } from "../../lib/exportBundle";
 import { boundingBox } from "../../lib/geometry";
@@ -298,6 +299,19 @@ export function Editor() {
             onReorder={store.reorderHotspot}
           />
 
+          <ObjectsList
+            objects={project.objects}
+            hotspots={project.hotspots}
+            selectedId={selectedObjectId}
+            onSelect={selectObject}
+            onReorder={store.reorderObject}
+            onToggleHidden={(id) => store.updateObject(id, (o) => ({ ...o, hidden: !o.hidden }))}
+            onDelete={(id) => {
+              store.removeObject(id);
+              if (selectedObjectId === id) setSelectedObjectId(null);
+            }}
+          />
+
           {selectedObject && (
             <ObjectInspector
               object={selectedObject}
@@ -321,6 +335,8 @@ export function Editor() {
               groups={project.groups}
               palette={project.theme.palette}
               interaction={project.theme.interaction}
+              objects={project.objects}
+              onSelectObject={selectObject}
               onChange={(updater) => store.updateHotspot(selected.id, updater)}
               onDelete={() => {
                 store.removeHotspot(selected.id);

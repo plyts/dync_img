@@ -714,6 +714,12 @@ body {
   flex-shrink: 0;
 }
 
+.dy-hotspot-row .dy-btn {
+  padding: 3px 7px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
 .dy-hotspot-row .name {
   flex: 1;
   min-width: 0;

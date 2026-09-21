@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import type { Group, Hotspot, HotspotStyleOverride, InteractionSettings, StepContent } from "../../types";
+import type { CanvasObject, Group, Hotspot, HotspotStyleOverride, InteractionSettings, StepContent } from "../../types";
 import { effectiveHotspotStyle } from "../../lib/geometry";
 import { STYLE_PRESETS } from "../../lib/stylePresets";
 
@@ -10,6 +10,7 @@ interface InspectorProps {
   groups: Group[];
   palette: string[];
   interaction: InteractionSettings;
+  objects: CanvasObject[];
   onChange: (updater: (h: Hotspot) => Hotspot) => void;
   onDelete: () => void;
   onRemoveArea: (index: number) => void;
@@ -19,6 +20,7 @@ interface InspectorProps {
   onStartConnectorShape: () => void;
   onBringToFront: () => void;
   onSendToBack: () => void;
+  onSelectObject: (id: string) => void;
 }
 
 export function Inspector({
@@ -27,6 +29,7 @@ export function Inspector({
   groups,
   palette,
   interaction,
+  objects,
   onChange,
   onDelete,
   onRemoveArea,
@@ -36,8 +39,12 @@ export function Inspector({
   onStartConnectorShape,
   onBringToFront,
   onSendToBack,
+  onSelectObject,
 }: InspectorProps) {
   const group = groups.find((g) => g.id === hotspot.groupId) ?? null;
+  const linkedLines = objects.filter(
+    (o) => o.kind === "line" && (o.fromHotspotId === hotspot.id || o.toHotspotId === hotspot.id),
+  );
   const connectorMode: "inherit" | "none" | "custom" =
     hotspot.connector === undefined ? "inherit" : hotspot.connector === null ? "none" : "custom";
   return (
@@ -405,6 +412,28 @@ export function Inspector({
           </div>
         )}
         </div>
+      </Section>
+
+      <Section title={`Objets liés${linkedLines.length ? ` (${linkedLines.length})` : ""}`}>
+        {linkedLines.length === 0 ? (
+          <p style={{ fontSize: 12, color: "var(--dy-muted)", margin: 0 }}>
+            Aucun objet libre (ligne, texte…) ne pointe vers ce bloc pour l'instant.
+          </p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {linkedLines.map((line) => {
+              const isFrom = line.kind === "line" && line.fromHotspotId === hotspot.id;
+              return (
+                <div key={line.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+                  <span style={{ flex: 1 }}>／ Ligne — {isFrom ? "point de départ" : "point d'arrivée"}</span>
+                  <button className="dy-btn" onClick={() => onSelectObject(line.id)}>
+                    Voir
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Section>
 
       <Section title="Contenu">
