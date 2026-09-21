@@ -1,0 +1,246 @@
+import { useState } from "react";
+import type { Group, Hotspot, StepContent } from "../../types";
+
+interface InspectorProps {
+  hotspot: Hotspot;
+  groups: Group[];
+  palette: string[];
+  onChange: (updater: (h: Hotspot) => Hotspot) => void;
+  onDelete: () => void;
+}
+
+export function Inspector({ hotspot, groups, palette, onChange, onDelete }: InspectorProps) {
+  return (
+    <div>
+      <h3>Fiche du bloc</h3>
+
+      <div className="dy-field">
+        <label>Nom</label>
+        <input
+          type="text"
+          value={hotspot.label}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange((h) => ({ ...h, label: v }));
+          }}
+        />
+      </div>
+
+      <div className="dy-field">
+        <label>Couleur</label>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+          {palette.map((c) => (
+            <button
+              key={c}
+              onClick={() => onChange((h) => ({ ...h, color: c }))}
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: "50%",
+                background: c,
+                border: c === hotspot.color ? "2px solid var(--dy-ink)" : "1px solid transparent",
+                cursor: "pointer",
+              }}
+              aria-label={c}
+            />
+          ))}
+          <input
+            type="color"
+            value={hotspot.color}
+            onChange={(e) => {
+              const v = e.target.value;
+              onChange((h) => ({ ...h, color: v }));
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="dy-field">
+        <label>Groupe</label>
+        <select
+          value={hotspot.groupId ?? ""}
+          onChange={(e) => {
+            const v = e.target.value || null;
+            onChange((h) => ({ ...h, groupId: v }));
+          }}
+        >
+          <option value="">— aucun —</option>
+          {groups.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="dy-field">
+        <label>Résumé</label>
+        <textarea
+          rows={2}
+          value={hotspot.content.summary}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange((h) => ({ ...h, content: { ...h.content, summary: v } }));
+          }}
+        />
+      </div>
+
+      <StepsEditor
+        steps={hotspot.content.steps}
+        onChange={(steps) => onChange((h) => ({ ...h, content: { ...h.content, steps } }))}
+      />
+
+      <div className="dy-field">
+        <label>Exemple</label>
+        <textarea
+          rows={3}
+          value={hotspot.content.example}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange((h) => ({ ...h, content: { ...h.content, example: v } }));
+          }}
+        />
+      </div>
+
+      <div className="dy-field">
+        <label>Quand l'utiliser</label>
+        <textarea
+          rows={2}
+          value={hotspot.content.whenToUse}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange((h) => ({ ...h, content: { ...h.content, whenToUse: v } }));
+          }}
+        />
+      </div>
+
+      <div className="dy-field">
+        <label>Point d'attention</label>
+        <textarea
+          rows={2}
+          value={hotspot.content.caution}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange((h) => ({ ...h, content: { ...h.content, caution: v } }));
+          }}
+        />
+      </div>
+
+      <div className="dy-field">
+        <label>Outils</label>
+        <TagInput
+          tags={hotspot.content.tools}
+          onChange={(tools) => onChange((h) => ({ ...h, content: { ...h.content, tools } }))}
+        />
+      </div>
+
+      <button className="dy-btn" onClick={onDelete} style={{ width: "100%" }}>
+        Supprimer ce bloc
+      </button>
+    </div>
+  );
+}
+
+function StepsEditor({
+  steps,
+  onChange,
+}: {
+  steps: StepContent[];
+  onChange: (steps: StepContent[]) => void;
+}) {
+  function addStep() {
+    onChange([...steps, { id: crypto.randomUUID(), title: `Étape ${steps.length + 1}`, body: "" }]);
+  }
+  function updateStep(id: string, patch: Partial<StepContent>) {
+    onChange(steps.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  }
+  function removeStep(id: string) {
+    onChange(steps.filter((s) => s.id !== id));
+  }
+  function move(id: string, dir: -1 | 1) {
+    const i = steps.findIndex((s) => s.id === id);
+    const j = i + dir;
+    if (i === -1 || j < 0 || j >= steps.length) return;
+    const next = [...steps];
+    [next[i], next[j]] = [next[j], next[i]];
+    onChange(next);
+  }
+
+  return (
+    <div className="dy-field">
+      <label>Étapes (de A à Z)</label>
+      {steps.map((s) => (
+        <div key={s.id} className="dy-step-editor">
+          <div className="dy-step-editor-head">
+            <strong>{s.title || "Étape"}</strong>
+            <button className="dy-btn" onClick={() => move(s.id, -1)} aria-label="Monter">
+              ↑
+            </button>
+            <button className="dy-btn" onClick={() => move(s.id, 1)} aria-label="Descendre">
+              ↓
+            </button>
+            <button className="dy-btn" onClick={() => removeStep(s.id)} aria-label="Supprimer">
+              ✕
+            </button>
+          </div>
+          <input
+            type="text"
+            value={s.title}
+            placeholder="Titre de l'étape"
+            onChange={(e) => updateStep(s.id, { title: e.target.value })}
+            style={{ marginBottom: 6, width: "100%" }}
+          />
+          <textarea
+            rows={2}
+            value={s.body}
+            placeholder="Description"
+            onChange={(e) => updateStep(s.id, { body: e.target.value })}
+            style={{ width: "100%" }}
+          />
+        </div>
+      ))}
+      <button className="dy-btn" onClick={addStep} style={{ width: "100%" }}>
+        + Ajouter une étape
+      </button>
+    </div>
+  );
+}
+
+function TagInput({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
+  const [draft, setDraft] = useState("");
+
+  function commit() {
+    const v = draft.trim();
+    if (v && !tags.includes(v)) onChange([...tags, v]);
+    setDraft("");
+  }
+
+  return (
+    <div className="dy-tag-input">
+      {tags.map((t) => (
+        <span key={t}>
+          {t}
+          <button
+            onClick={() => onChange(tags.filter((x) => x !== t))}
+            style={{ border: "none", background: "none", cursor: "pointer" }}
+            aria-label={`Retirer ${t}`}
+          >
+            ✕
+          </button>
+        </span>
+      ))}
+      <input
+        value={draft}
+        placeholder="ajouter…"
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === ",") {
+            e.preventDefault();
+            commit();
+          }
+        }}
+        onBlur={commit}
+      />
+    </div>
+  );
+}
