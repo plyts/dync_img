@@ -16,6 +16,7 @@ const KIND_ICON: Record<CanvasObject["kind"], string> = {
   shape: "▭",
   line: "／",
   pulse: "🔵",
+  embed: "📦",
 };
 
 function labelFor(o: CanvasObject, hotspots: Hotspot[]): string {
@@ -23,6 +24,7 @@ function labelFor(o: CanvasObject, hotspots: Hotspot[]): string {
   if (o.kind === "image") return o.alt || "Image";
   if (o.kind === "shape") return o.shapeType === "ellipse" ? "Forme (ellipse)" : "Forme (rectangle)";
   if (o.kind === "pulse") return "Point pulsé";
+  if (o.kind === "embed") return o.format === "svg" ? "SVG importé" : "Bloc HTML/CSS/JS";
   const nameOf = (id: string | null) => (id ? (hotspots.find((h) => h.id === id)?.label ?? "?") : "libre");
   return `Ligne : ${nameOf(o.fromHotspotId)} → ${nameOf(o.toHotspotId)}`;
 }

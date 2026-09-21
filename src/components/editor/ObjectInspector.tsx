@@ -1,4 +1,6 @@
+import { useRef } from "react";
 import type { CanvasObject, Hotspot } from "../../types";
+import { parseSvgIntrinsicSize, readTextFile } from "../../lib/svgImport";
 
 interface ObjectInspectorProps {
   object: CanvasObject;
@@ -15,6 +17,7 @@ const KIND_LABEL: Record<CanvasObject["kind"], string> = {
   shape: "Forme",
   line: "Ligne",
   pulse: "Point pulsé",
+  embed: "Fichier importé",
 };
 
 export function ObjectInspector({ object, hotspots, onChange, onDelete, onBringToFront, onSendToBack }: ObjectInspectorProps) {
@@ -164,6 +167,8 @@ export function ObjectInspector({ object, hotspots, onChange, onDelete, onBringT
           </div>
         </>
       )}
+
+      {object.kind === "embed" && <EmbedFields object={object} onChange={onChange} />}
 
       {object.kind === "pulse" && (
         <>
@@ -330,5 +335,58 @@ export function ObjectInspector({ object, hotspots, onChange, onDelete, onBringT
         Supprimer cet objet
       </button>
     </div>
+  );
+}
+
+function EmbedFields({
+  object,
+  onChange,
+}: {
+  object: Extract<CanvasObject, { kind: "embed" }>;
+  onChange: (patch: Partial<Extract<CanvasObject, { kind: "embed" }>>) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleReplace(file: File) {
+    const text = await readTextFile(file);
+    if (object.format === "svg") {
+      const { width, height } = parseSvgIntrinsicSize(text);
+      onChange({ markup: text, sourceW: width, sourceH: height });
+    } else {
+      onChange({ markup: text });
+    }
+  }
+
+  return (
+    <>
+      <p style={{ fontSize: 11, color: "var(--dy-muted)", margin: "0 0 8px" }}>
+        {object.format === "svg"
+          ? "Fichier SVG importé — ses animations internes (SMIL, CSS) jouent telles quelles."
+          : "Bloc HTML/CSS/JS importé — le CSS et le JS qu'il contient s'exécutent tels quels dans la page finale."}
+      </p>
+      <button className="dy-btn" onClick={() => fileInputRef.current?.click()} style={{ width: "100%", marginBottom: 8 }}>
+        ⭱ Remplacer le fichier{object.format === "svg" ? " .svg" : " .html"}
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={object.format === "svg" ? "image/svg+xml,.svg" : ".html,text/html"}
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) handleReplace(f);
+          e.target.value = "";
+        }}
+      />
+      <div className="dy-field">
+        <label>Code source</label>
+        <textarea
+          rows={8}
+          value={object.markup}
+          onChange={(e) => onChange({ markup: e.target.value })}
+          className="dy-code-textarea"
+        />
+      </div>
+    </>
   );
 }

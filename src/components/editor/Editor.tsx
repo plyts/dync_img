@@ -14,6 +14,7 @@ import { ObjectsList } from "./ObjectsList";
 import { readImageFile, exportProjectJson, readProjectFile, downloadTextFile } from "../../lib/projectIO";
 import { buildStandaloneHtml } from "../../lib/exportBundle";
 import { boundingBox } from "../../lib/geometry";
+import { HTML_EMBED_STARTER, parseSvgIntrinsicSize, readTextFile } from "../../lib/svgImport";
 import type { PercentRect } from "../../lib/ai";
 import type { CanvasObject, HotspotShape, InteractionSettings, ProjectTheme } from "../../types";
 
@@ -31,6 +32,7 @@ export function Editor() {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
   const objectImageInputRef = useRef<HTMLInputElement>(null);
+  const svgEmbedInputRef = useRef<HTMLInputElement>(null);
 
   const selected = project.hotspots.find((h) => h.id === selectedId) ?? null;
   const selectedObject = project.objects.find((o) => o.id === selectedObjectId) ?? null;
@@ -68,6 +70,13 @@ export function Editor() {
   async function handleObjectImageUpload(file: File) {
     const image = await readImageFile(file);
     const created = store.addImageObject(image.src, file.name);
+    selectObject(created.id);
+  }
+
+  async function handleSvgEmbedUpload(file: File) {
+    const text = await readTextFile(file);
+    const { width, height } = parseSvgIntrinsicSize(text);
+    const created = store.addEmbedObject("svg", text, width, height);
     selectObject(created.id);
   }
 
@@ -245,6 +254,24 @@ export function Editor() {
               ．→ Ligne + point
             </button>
           </div>
+          <div className="tool-group">
+            <button
+              onClick={() => svgEmbedInputRef.current?.click()}
+              disabled={!project.image.src}
+              title="Importer un fichier .svg — ses animations internes (SMIL, CSS) sont conservées"
+            >
+              📦 SVG animé
+            </button>
+            <button
+              onClick={() =>
+                selectObject(store.addEmbedObject("html", HTML_EMBED_STARTER, 100, 100).id)
+              }
+              disabled={!project.image.src}
+              title="Bloc HTML/CSS/JS personnalisé, à éditer dans le panneau de droite"
+            >
+              📦 Bloc HTML/CSS/JS
+            </button>
+          </div>
           <input
             ref={objectImageInputRef}
             type="file"
@@ -253,6 +280,17 @@ export function Editor() {
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (f) handleObjectImageUpload(f);
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={svgEmbedInputRef}
+            type="file"
+            accept="image/svg+xml,.svg"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleSvgEmbedUpload(f);
               e.target.value = "";
             }}
           />

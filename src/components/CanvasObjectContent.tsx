@@ -1,6 +1,27 @@
-import type { CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import type { CanvasObject, Hotspot } from "../types";
 import { connectorPathD, resolveLineEndpoint } from "../lib/geometry";
+
+/** Re-creates any <script> tags found in injected HTML so they actually
+ *  run — scripts inserted via innerHTML never execute on their own, by
+ *  design of the DOM. This is the same trick the standalone export runtime
+ *  uses (see exportBundle.ts), so behavior matches between editor and
+ *  export. */
+function EmbedHtmlContent({ markup }: { markup: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.innerHTML = markup;
+    el.querySelectorAll("script").forEach((old) => {
+      const fresh = document.createElement("script");
+      Array.from(old.attributes).forEach((a) => fresh.setAttribute(a.name, a.value));
+      fresh.textContent = old.textContent;
+      old.replaceWith(fresh);
+    });
+  }, [markup]);
+  return <div ref={ref} style={{ width: "100%", height: "100%" }} />;
+}
 
 /**
  * Renders one freeform canvas object as SVG children — same viewBox="0 0
@@ -67,6 +88,25 @@ export function CanvasObjectContent({ obj, hotspots = [] }: { obj: CanvasObject;
           ))}
         </text>
       </g>
+    );
+  }
+
+  if (obj.kind === "embed") {
+    if (obj.format === "svg") {
+      const scaleX = obj.w / (obj.sourceW || 100);
+      const scaleY = obj.h / (obj.sourceH || 100);
+      return (
+        <g
+          transform={`translate(${obj.x} ${obj.y}) scale(${scaleX} ${scaleY})`}
+          pointerEvents="none"
+          dangerouslySetInnerHTML={{ __html: obj.markup }}
+        />
+      );
+    }
+    return (
+      <foreignObject x={obj.x} y={obj.y} width={obj.w} height={obj.h} pointerEvents="none">
+        <EmbedHtmlContent markup={obj.markup} />
+      </foreignObject>
     );
   }
 

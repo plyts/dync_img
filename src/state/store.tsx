@@ -6,7 +6,7 @@ import {
   useReducer,
   type ReactNode,
 } from "react";
-import type { CanvasObject, Group, Hotspot, HotspotShape, ImageMeta, ImageObject, LineObject, Project, PulseObject, ShapeObject, TextObject } from "../types";
+import type { CanvasObject, EmbedObject, Group, Hotspot, HotspotShape, ImageMeta, ImageObject, LineObject, Project, PulseObject, ShapeObject, TextObject } from "../types";
 import { DEFAULT_PALETTE, emptyContent } from "../types";
 import { centroid, centroidOfAreas } from "../lib/geometry";
 
@@ -178,6 +178,31 @@ function buildPulseObject(project: Project): PulseObject {
   };
 }
 
+function buildEmbedObject(
+  project: Project,
+  format: "svg" | "html",
+  markup: string,
+  sourceW: number,
+  sourceH: number,
+): EmbedObject {
+  const o = spawnOffset(project);
+  const w = sourceH > 0 ? Math.min(30, (30 * sourceW) / sourceH) : 24;
+  const h = sourceW > 0 ? (w * sourceH) / sourceW : 24;
+  return {
+    id: crypto.randomUUID(),
+    kind: "embed",
+    order: project.objects.length,
+    x: 35 + o,
+    y: 35 + o,
+    w,
+    h,
+    format,
+    markup,
+    sourceW,
+    sourceH,
+  };
+}
+
 export interface ProjectStore {
   project: Project;
   canUndo: boolean;
@@ -206,6 +231,7 @@ export interface ProjectStore {
   addImageObject: (src: string, alt: string) => ImageObject;
   addLineObject: () => LineObject;
   addPulseObject: () => PulseObject;
+  addEmbedObject: (format: "svg" | "html", markup: string, sourceW: number, sourceH: number) => EmbedObject;
   reorderObject: (id: string, direction: -1 | 1) => void;
   updateObject: (id: string, updater: (o: CanvasObject) => CanvasObject) => void;
   removeObject: (id: string) => void;
@@ -347,6 +373,11 @@ export function ProjectProvider({
       },
       addPulseObject: () => {
         const created = buildPulseObject(state.present);
+        update((p) => ({ ...p, objects: [...p.objects, created] }));
+        return created;
+      },
+      addEmbedObject: (format, markup, sourceW, sourceH) => {
+        const created = buildEmbedObject(state.present, format, markup, sourceW, sourceH);
         update((p) => ({ ...p, objects: [...p.objects, created] }));
         return created;
       },

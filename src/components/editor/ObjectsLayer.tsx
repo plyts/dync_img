@@ -1,5 +1,5 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import type { CanvasObject, Hotspot, ImageObject, LineObject, Point, ShapeObject, TextObject } from "../../types";
+import type { CanvasObject, EmbedObject, Hotspot, ImageObject, LineObject, Point, ShapeObject, TextObject } from "../../types";
 import { clientToPercent, resizeRect, resolveLineEndpoint, type RectHandle } from "../../lib/geometry";
 import { CanvasObjectContent } from "../CanvasObjectContent";
 
@@ -15,7 +15,7 @@ interface ObjectsLayerProps {
   onChange: (id: string, patch: Partial<CanvasObject>) => void;
 }
 
-type RectObject = TextObject | ImageObject | ShapeObject;
+type RectObject = TextObject | ImageObject | ShapeObject | EmbedObject;
 
 function isRectObject(o: CanvasObject): o is RectObject {
   return o.kind !== "line" && o.kind !== "pulse";

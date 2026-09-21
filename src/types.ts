@@ -148,7 +148,7 @@ export interface ImageMeta {
  * shape) are draggable/resizable via x/y/w/h like everything else; the line
  * kind is dragged by its two endpoints instead.
  */
-export type CanvasObjectKind = "text" | "image" | "shape" | "line" | "pulse";
+export type CanvasObjectKind = "text" | "image" | "shape" | "line" | "pulse" | "embed";
 
 interface CanvasObjectMeta {
   id: string;
@@ -189,6 +189,23 @@ export interface ShapeObject extends RectObjectBase {
   strokeWidth: number;
   fill: string;
   dashPattern: string;
+}
+
+/**
+ * An imported animation file — an SVG (its own SMIL/CSS animations play
+ * natively once embedded) or a raw HTML+CSS+JS snippet — placed on the
+ * image and manipulated exactly like any other object: moved, resized,
+ * deleted, reordered. `markup` is the file's/snippet's source, kept as-is;
+ * `sourceW`/`sourceH` are the SVG's own intrinsic size (parsed at import
+ * time), used to scale it correctly into the object's x/y/w/h box. Ignored
+ * for the "html" format, which fills its box directly.
+ */
+export interface EmbedObject extends RectObjectBase {
+  kind: "embed";
+  format: "svg" | "html";
+  markup: string;
+  sourceW: number;
+  sourceH: number;
 }
 
 /**
@@ -234,7 +251,7 @@ export interface PulseObject extends CanvasObjectMeta {
   speedMs: number;
 }
 
-export type CanvasObject = TextObject | ImageObject | ShapeObject | LineObject | PulseObject;
+export type CanvasObject = TextObject | ImageObject | ShapeObject | LineObject | PulseObject | EmbedObject;
 
 export interface Project {
   schemaVersion: 2;
