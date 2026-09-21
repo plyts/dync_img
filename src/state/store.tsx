@@ -6,7 +6,7 @@ import {
   useReducer,
   type ReactNode,
 } from "react";
-import type { Group, Hotspot, HotspotShape, ImageMeta, Project } from "../types";
+import type { CanvasObject, Group, Hotspot, HotspotShape, ImageMeta, ImageObject, Project, ShapeObject, TextObject } from "../types";
 import { DEFAULT_PALETTE, emptyContent } from "../types";
 import { centroid, centroidOfAreas } from "../lib/geometry";
 
@@ -82,6 +82,65 @@ function buildHotspot(
   };
 }
 
+/** Successive new objects step diagonally so they never spawn stacked
+ *  exactly on top of one another (which would hide all but the topmost). */
+function spawnOffset(project: Project): number {
+  return (project.objects.length % 6) * 3;
+}
+
+function buildTextObject(project: Project): TextObject {
+  const o = spawnOffset(project);
+  return {
+    id: crypto.randomUUID(),
+    kind: "text",
+    x: 38 + o,
+    y: 42 + o,
+    w: 24,
+    h: 9,
+    order: project.objects.length,
+    text: "Texte",
+    color: "#2c2a27",
+    fontSize: 3.2,
+    fontWeight: "normal",
+    align: "left",
+    background: null,
+  };
+}
+
+function buildShapeObject(project: Project, shapeType: "rect" | "ellipse"): ShapeObject {
+  const o = spawnOffset(project);
+  return {
+    id: crypto.randomUUID(),
+    kind: "shape",
+    x: 35 + o,
+    y: 35 + o,
+    w: 22,
+    h: 16,
+    order: project.objects.length,
+    shapeType,
+    strokeColor: "#2c2a27",
+    strokeWidth: 0.6,
+    fill: "none",
+    dashPattern: "2 1.4",
+  };
+}
+
+function buildImageObject(project: Project, src: string, alt: string): ImageObject {
+  const o = spawnOffset(project);
+  return {
+    id: crypto.randomUUID(),
+    kind: "image",
+    x: 40 + o,
+    y: 40 + o,
+    w: 16,
+    h: 16,
+    order: project.objects.length,
+    src,
+    alt,
+    opacity: 1,
+  };
+}
+
 export interface ProjectStore {
   project: Project;
   canUndo: boolean;
@@ -105,6 +164,13 @@ export interface ProjectStore {
   addGroup: (label: string) => Group;
   updateGroup: (id: string, updater: (g: Group) => Group) => void;
   removeGroup: (id: string) => void;
+  addTextObject: () => TextObject;
+  addShapeObject: (shapeType: "rect" | "ellipse") => ShapeObject;
+  addImageObject: (src: string, alt: string) => ImageObject;
+  updateObject: (id: string, updater: (o: CanvasObject) => CanvasObject) => void;
+  removeObject: (id: string) => void;
+  bringObjectToFront: (id: string) => void;
+  sendObjectToBack: (id: string) => void;
 }
 
 const ProjectContext = createContext<ProjectStore | null>(null);
@@ -219,6 +285,40 @@ export function ProjectProvider({
           groups: p.groups.filter((g) => g.id !== id),
           hotspots: p.hotspots.map((h) => (h.groupId === id ? { ...h, groupId: null } : h)),
         })),
+      addTextObject: () => {
+        const created = buildTextObject(state.present);
+        update((p) => ({ ...p, objects: [...p.objects, created] }));
+        return created;
+      },
+      addShapeObject: (shapeType) => {
+        const created = buildShapeObject(state.present, shapeType);
+        update((p) => ({ ...p, objects: [...p.objects, created] }));
+        return created;
+      },
+      addImageObject: (src, alt) => {
+        const created = buildImageObject(state.present, src, alt);
+        update((p) => ({ ...p, objects: [...p.objects, created] }));
+        return created;
+      },
+      updateObject: (id, updater) =>
+        update((p) => ({
+          ...p,
+          objects: p.objects.map((o) => (o.id === id ? updater(o) : o)),
+        })),
+      removeObject: (id) =>
+        update((p) => ({ ...p, objects: p.objects.filter((o) => o.id !== id) })),
+      bringObjectToFront: (id) =>
+        update((p) => {
+          const item = p.objects.find((o) => o.id === id);
+          if (!item) return p;
+          return { ...p, objects: [...p.objects.filter((o) => o.id !== id), item] };
+        }),
+      sendObjectToBack: (id) =>
+        update((p) => {
+          const item = p.objects.find((o) => o.id === id);
+          if (!item) return p;
+          return { ...p, objects: [item, ...p.objects.filter((o) => o.id !== id)] };
+        }),
     };
   }, [state, update]);
 

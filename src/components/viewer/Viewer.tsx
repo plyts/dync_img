@@ -3,6 +3,7 @@ import { useProject } from "../../state/store";
 import { Stage } from "../Stage";
 import { HotspotsLayer } from "./HotspotsLayer";
 import { DetailPanel } from "./DetailPanel";
+import { CanvasObjectsView } from "./CanvasObjectsView";
 
 interface ViewerProps {
   /**
@@ -78,6 +79,7 @@ export function Viewer({ syncSelectedId }: ViewerProps = {}) {
           </div>
         )}
         <Stage image={project.image}>
+          <CanvasObjectsView objects={project.objects} />
           <HotspotsLayer
             project={project}
             hoverId={hoverId}

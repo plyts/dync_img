@@ -141,6 +141,54 @@ export interface ImageMeta {
   alt: string;
 }
 
+/**
+ * Freeform objects placed directly on the image — independent of hotspots.
+ * Purely decorative/annotative: they render in the viewer and export but
+ * aren't clickable there. In the editor they're draggable, resizable (via
+ * x/y/w/h, all in image-percent like everything else) and deletable.
+ */
+export type CanvasObjectKind = "text" | "image" | "shape";
+
+interface CanvasObjectBase {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  order: number;
+  hidden?: boolean;
+}
+
+export interface TextObject extends CanvasObjectBase {
+  kind: "text";
+  text: string;
+  color: string;
+  /** Font size in percent of the image width — stays proportional at any
+   *  export size, like every other measurement in this app. */
+  fontSize: number;
+  fontWeight: "normal" | "bold";
+  align: "left" | "center" | "right";
+  background: string | null;
+}
+
+export interface ImageObject extends CanvasObjectBase {
+  kind: "image";
+  src: string;
+  alt: string;
+  opacity: number;
+}
+
+export interface ShapeObject extends CanvasObjectBase {
+  kind: "shape";
+  shapeType: "rect" | "ellipse";
+  strokeColor: string;
+  strokeWidth: number;
+  fill: string;
+  dashPattern: string;
+}
+
+export type CanvasObject = TextObject | ImageObject | ShapeObject;
+
 export interface Project {
   schemaVersion: 2;
   id: string;
@@ -148,6 +196,7 @@ export interface Project {
   image: ImageMeta;
   groups: Group[];
   hotspots: Hotspot[];
+  objects: CanvasObject[];
   theme: ProjectTheme;
   createdAt: string;
   updatedAt: string;
@@ -203,6 +252,7 @@ export function createEmptyProject(name = "Nouveau projet"): Project {
     image: { src: "", width: 0, height: 0, alt: name },
     groups: [],
     hotspots: [],
+    objects: [],
     theme: {
       palette: DEFAULT_PALETTE,
       fontDisplay: "Caveat",

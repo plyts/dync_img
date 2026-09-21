@@ -8,11 +8,13 @@ import { GroupsPanel } from "./GroupsPanel";
 import { StylePanel } from "./StylePanel";
 import { AIAssistModal } from "./AIAssistModal";
 import { MiniPreview } from "./MiniPreview";
+import { ObjectsLayer } from "./ObjectsLayer";
+import { ObjectInspector } from "./ObjectInspector";
 import { readImageFile, exportProjectJson, readProjectFile, downloadTextFile } from "../../lib/projectIO";
 import { buildStandaloneHtml } from "../../lib/exportBundle";
 import { boundingBox } from "../../lib/geometry";
 import type { PercentRect } from "../../lib/ai";
-import type { HotspotShape, InteractionSettings, ProjectTheme } from "../../types";
+import type { CanvasObject, HotspotShape, InteractionSettings, ProjectTheme } from "../../types";
 
 export function Editor() {
   const store = useProject();
@@ -20,29 +22,53 @@ export function Editor() {
   const [tool, setTool] = useState<Tool>("select");
   const [drawMode, setDrawMode] = useState<DrawMode>("new");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
   const [aiRegion, setAiRegion] = useState<PercentRect | null>(null);
   const [styleOpen, setStyleOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
+  const objectImageInputRef = useRef<HTMLInputElement>(null);
 
   const selected = project.hotspots.find((h) => h.id === selectedId) ?? null;
+  const selectedObject = project.objects.find((o) => o.id === selectedObjectId) ?? null;
+
+  function selectHotspot(id: string | null) {
+    setSelectedId(id);
+    if (id) setSelectedObjectId(null);
+  }
+
+  function selectObject(id: string | null) {
+    setSelectedObjectId(id);
+    if (id) setSelectedId(null);
+  }
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (!selectedId) return;
+      if (!selectedId && !selectedObjectId) return;
       if (e.key !== "Delete" && e.key !== "Backspace") return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable) return;
       e.preventDefault();
-      store.removeHotspot(selectedId);
-      setSelectedId(null);
+      if (selectedId) {
+        store.removeHotspot(selectedId);
+        setSelectedId(null);
+      } else if (selectedObjectId) {
+        store.removeObject(selectedObjectId);
+        setSelectedObjectId(null);
+      }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectedId, store]);
+  }, [selectedId, selectedObjectId, store]);
+
+  async function handleObjectImageUpload(file: File) {
+    const image = await readImageFile(file);
+    const created = store.addImageObject(image.src, file.name);
+    selectObject(created.id);
+  }
 
   async function handleImageUpload(file: File) {
     const image = await readImageFile(file);
@@ -174,6 +200,31 @@ export function Editor() {
           >
             ✨ Assistant IA
           </button>
+          <div className="tool-group">
+            <button onClick={() => selectObject(store.addTextObject().id)} disabled={!project.image.src}>
+              🔤 Texte
+            </button>
+            <button onClick={() => objectImageInputRef.current?.click()} disabled={!project.image.src}>
+              🖼 Image/icône
+            </button>
+            <button onClick={() => selectObject(store.addShapeObject("rect").id)} disabled={!project.image.src}>
+              ▭ Forme
+            </button>
+            <button onClick={() => selectObject(store.addShapeObject("ellipse").id)} disabled={!project.image.src}>
+              ◯ Forme
+            </button>
+          </div>
+          <input
+            ref={objectImageInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/svg+xml,image/webp"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleObjectImageUpload(f);
+              e.target.value = "";
+            }}
+          />
         </div>
       </div>
 
@@ -185,10 +236,10 @@ export function Editor() {
               selectedId={selectedId}
               tool={tool}
               drawMode={drawMode}
-              onSelect={setSelectedId}
+              onSelect={selectHotspot}
               onCreate={(shape) => {
                 const created = store.addHotspot(shape);
-                setSelectedId(created.id);
+                selectHotspot(created.id);
               }}
               onAddArea={(id, shape) =>
                 store.updateHotspot(id, (h) => ({ ...h, areas: [...h.areas, shape] }))
@@ -222,6 +273,15 @@ export function Editor() {
               onToolChange={setTool}
               onDrawModeChange={setDrawMode}
             />
+            <ObjectsLayer
+              objects={project.objects}
+              selectedId={selectedObjectId}
+              interactive={tool === "select" && drawMode === "new"}
+              onSelect={selectObject}
+              onChange={(id, patch) =>
+                store.updateObject(id, (o) => ({ ...o, ...patch }) as CanvasObject)
+              }
+            />
           </Stage>
           {previewOpen && <MiniPreview selectedId={selectedId} onClose={() => setPreviewOpen(false)} />}
         </div>
@@ -230,9 +290,24 @@ export function Editor() {
           <HotspotList
             hotspots={project.hotspots}
             selectedId={selectedId}
-            onSelect={setSelectedId}
+            onSelect={selectHotspot}
             onReorder={store.reorderHotspot}
           />
+
+          {selectedObject && (
+            <ObjectInspector
+              object={selectedObject}
+              onChange={(patch) =>
+                store.updateObject(selectedObject.id, (o) => ({ ...o, ...patch }) as CanvasObject)
+              }
+              onDelete={() => {
+                store.removeObject(selectedObject.id);
+                setSelectedObjectId(null);
+              }}
+              onBringToFront={() => store.bringObjectToFront(selectedObject.id)}
+              onSendToBack={() => store.sendObjectToBack(selectedObject.id)}
+            />
+          )}
 
           {selected && (
             <Inspector
