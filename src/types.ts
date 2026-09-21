@@ -163,6 +163,12 @@ interface CanvasObjectMeta {
    *  "combine" two otherwise-independent objects, like a pulse and a
    *  traveling-dot line, into one coordinated effect. */
   groupId?: string | null;
+  /** Set when this object is the auto-generated "en savoir plus" note
+   *  marker for a hotspot (AI content-draft flow, "Rédiger le contenu").
+   *  Lets re-running the draft update the existing marker instead of
+   *  spawning a duplicate, and lets deleting the hotspot clean it up too.
+   *  `null`/unset for every ordinary, manually placed object. */
+  noteForHotspotId?: string | null;
 }
 
 export interface ObjectGroup {

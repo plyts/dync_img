@@ -7,9 +7,11 @@ import {
   CONTENT_DRAFT_SYSTEM_PROMPT,
   detectHotspotsFromImage,
   draftHotspotContent,
+  formatHotspotNotesMarkdown,
   HOTSPOT_DETECTION_SYSTEM_PROMPT,
   type AIProviderId,
   type DetectedHotspot,
+  type DraftedHotspotContent,
   type PercentRect,
 } from "../../lib/ai";
 
@@ -24,7 +26,10 @@ interface AIAssistModalProps {
   onClearRegion: () => void;
   onClose: () => void;
   onImportDetected: (hotspots: DetectedHotspot[]) => void;
-  onApplyContent: (content: HotspotContent) => void;
+  /** `notesMarkdown` is the ready-to-store Markdown for the block's
+   *  companion "en savoir plus" note marker (already formatted for the
+   *  app's own renderer) — empty when the AI returned no links/tip. */
+  onApplyContent: (content: HotspotContent, notesMarkdown: string) => void;
 }
 
 export function AIAssistModal({
@@ -49,7 +54,7 @@ export function AIAssistModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detected, setDetected] = useState<DetectedHotspot[] | null>(null);
-  const [drafted, setDrafted] = useState<HotspotContent | null>(null);
+  const [drafted, setDrafted] = useState<DraftedHotspotContent | null>(null);
 
   function selectProvider(id: AIProviderId) {
     setProviderId(id);
@@ -266,11 +271,29 @@ export function AIAssistModal({
             </button>
             {drafted && (
               <div style={{ marginTop: 12 }}>
-                <p className="dy-summary">{drafted.summary}</p>
+                <p className="dy-summary">{drafted.content.summary}</p>
+                {(drafted.notes.links.length > 0 || drafted.notes.tip) && (
+                  <div className="dy-field">
+                    <label>Notes générées (fenêtre « en savoir plus » du bloc)</label>
+                    {drafted.notes.links.length > 0 && (
+                      <ul style={{ margin: "4px 0", paddingLeft: 18, fontSize: 12 }}>
+                        {drafted.notes.links.map((l, i) => (
+                          <li key={i}>
+                            <a href={l.url} target="_blank" rel="noopener noreferrer">
+                              {l.label}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {drafted.notes.tip && <p style={{ fontSize: 12, color: "var(--dy-muted)" }}>{drafted.notes.tip}</p>}
+                  </div>
+                )}
                 <button
                   className="dy-btn primary"
                   onClick={() => {
-                    onApplyContent(drafted);
+                    const notesMarkdown = formatHotspotNotesMarkdown(selectedLabel ?? "", drafted.notes);
+                    onApplyContent(drafted.content, notesMarkdown);
                     onClose();
                   }}
                 >

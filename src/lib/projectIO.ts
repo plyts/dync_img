@@ -101,6 +101,7 @@ function normalizeProject(raw: Record<string, unknown>): Record<string, unknown>
   const objects = (Array.isArray(raw.objects) ? raw.objects : []).map((o: Record<string, unknown>) => ({
     notes: "",
     groupId: null,
+    noteForHotspotId: null,
     ...o,
   }));
   const objectGroups = Array.isArray(raw.objectGroups) ? raw.objectGroups : [];

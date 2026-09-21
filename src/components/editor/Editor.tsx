@@ -567,8 +567,8 @@ export function Editor() {
               }));
             });
           }}
-          onApplyContent={(content) => {
-            if (selected) store.updateHotspot(selected.id, (h) => ({ ...h, content }));
+          onApplyContent={(content, notesMarkdown) => {
+            if (selected) store.applyAiHotspotDraft(selected.id, content, notesMarkdown);
           }}
         />
       )}

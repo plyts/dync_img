@@ -123,7 +123,11 @@ Réponds UNIQUEMENT avec un JSON valide au format :
   "example": string (un exemple concret court, type appel de code ou requête),
   "whenToUse": string (1-2 phrases),
   "caution": string (1-2 phrases sur un piège ou une limite),
-  "tools": string[] (2 à 4 outils/technos typiques)
+  "tools": string[] (2 à 4 outils/technos typiques),
+  "notes": {
+    "links": [{"label": string, "url": string}] (2 à 4 ressources externes réelles et vérifiables — paper arXiv, documentation officielle, dépôt GitHub ; n'invente jamais une URL, omets un lien si tu n'es pas sûr qu'il existe),
+    "tip": string (1-2 phrases : une nuance, un lien avec un autre bloc du schéma, ou une mise en garde pratique qui N'EST PAS déjà dans "caution" ou "whenToUse")
+  }
 }`;
 
 export function buildContentDraftUserPrompt(label: string, schemaContext: string): string {
@@ -340,6 +344,21 @@ export async function detectHotspotsFromImage(
   }));
 }
 
+export interface DraftedNoteLink {
+  label: string;
+  url: string;
+}
+
+export interface DraftedNotes {
+  links: DraftedNoteLink[];
+  tip: string;
+}
+
+export interface DraftedHotspotContent {
+  content: HotspotContent;
+  notes: DraftedNotes;
+}
+
 export async function draftHotspotContent(
   provider: AIProviderConfig,
   apiKey: string,
@@ -347,7 +366,7 @@ export async function draftHotspotContent(
   schemaContext: string,
   model?: string,
   baseUrlOverride?: string,
-): Promise<HotspotContent> {
+): Promise<DraftedHotspotContent> {
   const text = await callProvider(
     provider,
     apiKey,
@@ -364,13 +383,39 @@ export async function draftHotspotContent(
     whenToUse?: string;
     caution?: string;
     tools?: string[];
+    notes?: { links?: Array<{ label?: string; url?: string }>; tip?: string };
   };
   return {
-    summary: parsed.summary ?? "",
-    steps: (parsed.steps ?? []).map((s) => ({ id: crypto.randomUUID(), title: s.title, body: s.body })),
-    example: parsed.example ?? "",
-    whenToUse: parsed.whenToUse ?? "",
-    caution: parsed.caution ?? "",
-    tools: parsed.tools ?? [],
+    content: {
+      summary: parsed.summary ?? "",
+      steps: (parsed.steps ?? []).map((s) => ({ id: crypto.randomUUID(), title: s.title, body: s.body })),
+      example: parsed.example ?? "",
+      whenToUse: parsed.whenToUse ?? "",
+      caution: parsed.caution ?? "",
+      tools: parsed.tools ?? [],
+    },
+    notes: {
+      links: (parsed.notes?.links ?? [])
+        .filter((l): l is { label: string; url: string } => Boolean(l.label?.trim() && l.url?.trim()))
+        .map((l) => ({ label: l.label.trim(), url: l.url.trim() })),
+      tip: parsed.notes?.tip?.trim() ?? "",
+    },
   };
+}
+
+/**
+ * Renders drafted notes into the exact Markdown the app's own renderer
+ * supports (lib/markdown.ts: bold/italic/code/links/line-breaks only — no
+ * #headings or >blockquotes), so it displays cleanly in the object's
+ * click-to-reveal notes modal instead of showing literal "###"/">" marks.
+ */
+export function formatHotspotNotesMarkdown(label: string, notes: DraftedNotes): string {
+  if (!notes.links.length && !notes.tip) return "";
+  const lines = [`**${label}**`];
+  if (notes.links.length) {
+    lines.push("", "**Pour aller plus loin**");
+    for (const l of notes.links) lines.push(`- [${l.label}](${l.url})`);
+  }
+  if (notes.tip) lines.push("", `**→** ${notes.tip}`);
+  return lines.join("\n");
 }

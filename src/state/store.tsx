@@ -6,9 +6,9 @@ import {
   useReducer,
   type ReactNode,
 } from "react";
-import type { AnimationSequence, CanvasObject, EmbedObject, Group, Hotspot, HotspotShape, ImageMeta, ImageObject, LineObject, ObjectGroup, Project, PulseObject, SequenceStep, ShapeObject, TextObject } from "../types";
+import type { AnimationSequence, CanvasObject, EmbedObject, Group, Hotspot, HotspotContent, HotspotShape, ImageMeta, ImageObject, LineObject, ObjectGroup, Project, PulseObject, SequenceStep, ShapeObject, TextObject } from "../types";
 import { DEFAULT_PALETTE, emptyContent } from "../types";
-import { centroid, centroidOfAreas } from "../lib/geometry";
+import { centroid, centroidOfAreas, unionBoundingBox } from "../lib/geometry";
 
 interface HistoryState {
   past: Project[];
@@ -188,6 +188,33 @@ function buildPulseObject(project: Project): PulseObject {
   };
 }
 
+/** Corner point (image-percent) for a hotspot's auto-generated note marker —
+ *  inset from the top-right of its bounding box so it never overlaps the
+ *  hotspot's own centroid anchor/spotlight badge. */
+function noteMarkerPosition(areas: HotspotShape[]): { x: number; y: number } {
+  const box = unionBoundingBox(areas);
+  const inset = Math.min(1.5, box.w / 4, box.h / 4);
+  return { x: box.x2 - inset, y: box.y1 + inset };
+}
+
+function buildHotspotNoteMarker(project: Project, hotspot: Hotspot, notes: string): PulseObject {
+  const pos = noteMarkerPosition(hotspot.areas);
+  return {
+    id: crypto.randomUUID(),
+    kind: "pulse",
+    order: project.objects.length,
+    notes,
+    groupId: null,
+    noteForHotspotId: hotspot.id,
+    x: pos.x,
+    y: pos.y,
+    color: "#ffb020",
+    minRadius: 0.6,
+    maxRadius: 2.2,
+    speedMs: 1900,
+  };
+}
+
 function buildEmbedObject(
   project: Project,
   format: "svg" | "html",
@@ -231,6 +258,11 @@ export interface ProjectStore {
     specs: Array<{ areas: HotspotShape[]; spotlightShape?: HotspotShape | null }>,
   ) => Hotspot[];
   updateHotspot: (id: string, updater: (h: Hotspot) => Hotspot) => void;
+  /** Applies an AI-drafted fiche to a hotspot and upserts its companion
+   *  "en savoir plus" note marker (a small pulse object placed at the
+   *  block's corner) with the given Markdown — creating it on first draft,
+   *  updating it in place on every re-draft instead of duplicating it. */
+  applyAiHotspotDraft: (hotspotId: string, content: HotspotContent, notesMarkdown: string) => void;
   removeHotspot: (id: string) => void;
   reorderHotspot: (id: string, direction: -1 | 1) => void;
   bringToFront: (id: string) => void;
@@ -318,12 +350,28 @@ export function ProjectProvider({
           ...p,
           hotspots: p.hotspots.map((h) => (h.id === id ? updater(h) : h)),
         })),
+      applyAiHotspotDraft: (hotspotId, content, notesMarkdown) => {
+        const hotspot = state.present.hotspots.find((h) => h.id === hotspotId);
+        if (!hotspot) return;
+        const existingMarker = state.present.objects.find((o) => o.noteForHotspotId === hotspotId);
+        const pos = noteMarkerPosition(hotspot.areas);
+        update((p) => ({
+          ...p,
+          hotspots: p.hotspots.map((h) => (h.id === hotspotId ? { ...h, content } : h)),
+          objects: !notesMarkdown.trim()
+            ? p.objects
+            : existingMarker
+              ? p.objects.map((o) => (o.id === existingMarker.id ? { ...o, notes: notesMarkdown, x: pos.x, y: pos.y } : o))
+              : [...p.objects, buildHotspotNoteMarker(p, hotspot, notesMarkdown)],
+        }));
+      },
       removeHotspot: (id) =>
         update((p) => ({
           ...p,
           hotspots: p.hotspots
             .filter((h) => h.id !== id)
             .map((h, i) => ({ ...h, order: i })),
+          objects: p.objects.filter((o) => o.noteForHotspotId !== id),
         })),
       reorderHotspot: (id, direction) =>
         update((p) => {
