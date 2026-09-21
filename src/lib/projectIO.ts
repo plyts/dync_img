@@ -104,7 +104,11 @@ function normalizeProject(raw: Record<string, unknown>): Record<string, unknown>
     ...o,
   }));
   const objectGroups = Array.isArray(raw.objectGroups) ? raw.objectGroups : [];
-  return { ...raw, theme: { ...theme, interaction }, groups, hotspots, objects, objectGroups };
+  const sequences = (Array.isArray(raw.sequences) ? raw.sequences : []).map((seq: Record<string, unknown>) => ({
+    loop: false,
+    ...seq,
+  }));
+  return { ...raw, theme: { ...theme, interaction }, groups, hotspots, objects, objectGroups, sequences };
 }
 
 function validateProject(data: unknown): Project {

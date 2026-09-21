@@ -6,7 +6,7 @@ import {
   useReducer,
   type ReactNode,
 } from "react";
-import type { CanvasObject, EmbedObject, Group, Hotspot, HotspotShape, ImageMeta, ImageObject, LineObject, ObjectGroup, Project, PulseObject, ShapeObject, TextObject } from "../types";
+import type { AnimationSequence, CanvasObject, EmbedObject, Group, Hotspot, HotspotShape, ImageMeta, ImageObject, LineObject, ObjectGroup, Project, PulseObject, SequenceStep, ShapeObject, TextObject } from "../types";
 import { DEFAULT_PALETTE, emptyContent } from "../types";
 import { centroid, centroidOfAreas } from "../lib/geometry";
 
@@ -248,6 +248,13 @@ export interface ProjectStore {
   groupObjects: (ids: string[], label?: string) => ObjectGroup;
   ungroupObjects: (groupId: string) => void;
   syncGroupField: (groupId: string, field: string, value: unknown) => void;
+  addSequence: (label?: string) => AnimationSequence;
+  updateSequence: (id: string, updater: (s: AnimationSequence) => AnimationSequence) => void;
+  removeSequence: (id: string) => void;
+  addSequenceStep: (sequenceId: string, targetType: "hotspot" | "object", targetId: string) => void;
+  updateSequenceStep: (sequenceId: string, stepId: string, patch: Partial<SequenceStep>) => void;
+  removeSequenceStep: (sequenceId: string, stepId: string) => void;
+  reorderSequenceStep: (sequenceId: string, stepId: string, direction: -1 | 1) => void;
   updateObject: (id: string, updater: (o: CanvasObject) => CanvasObject) => void;
   removeObject: (id: string) => void;
   bringObjectToFront: (id: string) => void;
@@ -451,6 +458,64 @@ export function ProjectProvider({
           objects: p.objects.map((o) =>
             o.groupId === groupId && Object.prototype.hasOwnProperty.call(o, field) ? { ...o, [field]: value } : o,
           ),
+        })),
+      addSequence: (label) => {
+        const sequence: AnimationSequence = {
+          id: crypto.randomUUID(),
+          label: label ?? `Séquence ${state.present.sequences.length + 1}`,
+          steps: [],
+          loop: false,
+        };
+        update((p) => ({ ...p, sequences: [...p.sequences, sequence] }));
+        return sequence;
+      },
+      updateSequence: (id, updater) =>
+        update((p) => ({
+          ...p,
+          sequences: p.sequences.map((s) => (s.id === id ? updater(s) : s)),
+        })),
+      removeSequence: (id) =>
+        update((p) => ({ ...p, sequences: p.sequences.filter((s) => s.id !== id) })),
+      addSequenceStep: (sequenceId, targetType, targetId) =>
+        update((p) => ({
+          ...p,
+          sequences: p.sequences.map((s) =>
+            s.id === sequenceId
+              ? {
+                  ...s,
+                  steps: [...s.steps, { id: crypto.randomUUID(), targetType, targetId, delayMs: 1200 }],
+                }
+              : s,
+          ),
+        })),
+      updateSequenceStep: (sequenceId, stepId, patch) =>
+        update((p) => ({
+          ...p,
+          sequences: p.sequences.map((s) =>
+            s.id === sequenceId
+              ? { ...s, steps: s.steps.map((st) => (st.id === stepId ? { ...st, ...patch } : st)) }
+              : s,
+          ),
+        })),
+      removeSequenceStep: (sequenceId, stepId) =>
+        update((p) => ({
+          ...p,
+          sequences: p.sequences.map((s) =>
+            s.id === sequenceId ? { ...s, steps: s.steps.filter((st) => st.id !== stepId) } : s,
+          ),
+        })),
+      reorderSequenceStep: (sequenceId, stepId, direction) =>
+        update((p) => ({
+          ...p,
+          sequences: p.sequences.map((s) => {
+            if (s.id !== sequenceId) return s;
+            const idx = s.steps.findIndex((st) => st.id === stepId);
+            const swapWith = idx + direction;
+            if (idx === -1 || swapWith < 0 || swapWith >= s.steps.length) return s;
+            const steps = [...s.steps];
+            [steps[idx], steps[swapWith]] = [steps[swapWith], steps[idx]];
+            return { ...s, steps };
+          }),
         })),
     };
   }, [state, update]);

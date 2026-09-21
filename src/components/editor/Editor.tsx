@@ -11,6 +11,7 @@ import { MiniPreview } from "./MiniPreview";
 import { ObjectsLayer } from "./ObjectsLayer";
 import { ObjectInspector } from "./ObjectInspector";
 import { ObjectsList } from "./ObjectsList";
+import { SequencerPanel } from "./SequencerPanel";
 import { readImageFile, exportProjectJson, readProjectFile, downloadTextFile } from "../../lib/projectIO";
 import { buildStandaloneHtml } from "../../lib/exportBundle";
 import { boundingBox } from "../../lib/geometry";
@@ -28,6 +29,7 @@ export function Editor() {
   const [aiOpen, setAiOpen] = useState(false);
   const [aiRegion, setAiRegion] = useState<PercentRect | null>(null);
   const [styleOpen, setStyleOpen] = useState(false);
+  const [sequencerOpen, setSequencerOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     try {
@@ -214,6 +216,9 @@ export function Editor() {
           </button>
           <button className="dy-btn" onClick={() => setStyleOpen(true)}>
             🎨 Style
+          </button>
+          <button className="dy-btn" onClick={() => setSequencerOpen(true)} disabled={!project.image.src}>
+            🎬 Séquenceur
           </button>
           <button
             className={`dy-btn${previewOpen ? " active" : ""}`}
@@ -501,6 +506,22 @@ export function Editor() {
           onChangeInteraction={updateInteraction}
           onChangeTheme={updateTheme}
           onClose={() => setStyleOpen(false)}
+        />
+      )}
+
+      {sequencerOpen && (
+        <SequencerPanel
+          sequences={project.sequences}
+          hotspots={project.hotspots}
+          objects={project.objects}
+          onAddSequence={() => store.addSequence()}
+          onUpdateSequence={(id, patch) => store.updateSequence(id, (s) => ({ ...s, ...patch }))}
+          onRemoveSequence={(id) => store.removeSequence(id)}
+          onAddStep={store.addSequenceStep}
+          onUpdateStep={store.updateSequenceStep}
+          onRemoveStep={store.removeSequenceStep}
+          onReorderStep={store.reorderSequenceStep}
+          onClose={() => setSequencerOpen(false)}
         />
       )}
 

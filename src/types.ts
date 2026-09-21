@@ -267,6 +267,28 @@ export interface PulseObject extends CanvasObjectMeta {
 
 export type CanvasObject = TextObject | ImageObject | ShapeObject | LineObject | PulseObject | EmbedObject;
 
+/**
+ * One beat in an animation sequence — either selects a hotspot (replaying
+ * its full existing reveal: spotlight, connector, panel, step stagger,
+ * typewriter) or briefly flashes a canvas object. `delayMs` is the pause
+ * before THIS step fires, measured from the previous step firing — so the
+ * sequence is really a cue sheet/timeline: each row's delay is its offset
+ * from the row above.
+ */
+export interface SequenceStep {
+  id: string;
+  targetType: "hotspot" | "object";
+  targetId: string;
+  delayMs: number;
+}
+
+export interface AnimationSequence {
+  id: string;
+  label: string;
+  steps: SequenceStep[];
+  loop: boolean;
+}
+
 export interface Project {
   schemaVersion: 2;
   id: string;
@@ -276,6 +298,7 @@ export interface Project {
   hotspots: Hotspot[];
   objects: CanvasObject[];
   objectGroups: ObjectGroup[];
+  sequences: AnimationSequence[];
   theme: ProjectTheme;
   createdAt: string;
   updatedAt: string;
@@ -333,6 +356,7 @@ export function createEmptyProject(name = "Nouveau projet"): Project {
     hotspots: [],
     objects: [],
     objectGroups: [],
+    sequences: [],
     theme: {
       palette: DEFAULT_PALETTE,
       fontDisplay: "Caveat",

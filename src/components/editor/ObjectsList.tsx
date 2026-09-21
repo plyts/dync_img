@@ -13,7 +13,7 @@ interface ObjectsListProps {
   onGroup: (ids: string[]) => void;
 }
 
-const KIND_ICON: Record<CanvasObject["kind"], string> = {
+export const KIND_ICON: Record<CanvasObject["kind"], string> = {
   text: "🔤",
   image: "🖼",
   shape: "▭",
@@ -22,7 +22,7 @@ const KIND_ICON: Record<CanvasObject["kind"], string> = {
   embed: "📦",
 };
 
-function labelFor(o: CanvasObject, hotspots: Hotspot[]): string {
+export function labelFor(o: CanvasObject, hotspots: Hotspot[]): string {
   if (o.kind === "text") return o.text.trim() ? o.text.trim().slice(0, 24) : "Texte vide";
   if (o.kind === "image") return o.alt || "Image";
   if (o.kind === "shape") return o.shapeType === "ellipse" ? "Forme (ellipse)" : "Forme (rectangle)";

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useProject } from "../../state/store";
 import { Stage } from "../Stage";
 import { HotspotsLayer } from "./HotspotsLayer";
@@ -6,6 +6,7 @@ import { DetailPanel } from "./DetailPanel";
 import { CanvasObjectsView } from "./CanvasObjectsView";
 import { ObjectNotesHitLayer } from "./ObjectNotesHitLayer";
 import { ObjectNotesModal } from "./ObjectNotesModal";
+import type { AnimationSequence } from "../../types";
 
 interface ViewerProps {
   /**
@@ -25,6 +26,47 @@ export function Viewer({ syncSelectedId }: ViewerProps = {}) {
   const [playKey, setPlayKey] = useState(0);
   const [notesObjectId, setNotesObjectId] = useState<string | null>(null);
   const notesObject = project.objects.find((o) => o.id === notesObjectId) ?? null;
+  const [playingSequenceId, setPlayingSequenceId] = useState<string | null>(null);
+  const [flashObjectId, setFlashObjectId] = useState<string | null>(null);
+  const timersRef = useRef<number[]>([]);
+
+  function stopSequence() {
+    timersRef.current.forEach((t) => window.clearTimeout(t));
+    timersRef.current = [];
+    setPlayingSequenceId(null);
+    setFlashObjectId(null);
+  }
+
+  function playSequence(seq: AnimationSequence) {
+    stopSequence();
+    if (seq.steps.length === 0) return;
+    setPlayingSequenceId(seq.id);
+    let elapsed = 0;
+    const fire = (i: number) => {
+      const step = seq.steps[i];
+      elapsed += step.delayMs;
+      const timer = window.setTimeout(() => {
+        if (step.targetType === "hotspot") {
+          select(step.targetId);
+        } else {
+          setFlashObjectId(step.targetId);
+          window.setTimeout(() => setFlashObjectId(null), 1100);
+        }
+        if (i + 1 < seq.steps.length) {
+          fire(i + 1);
+        } else if (seq.loop) {
+          elapsed = 0;
+          fire(0);
+        } else {
+          setPlayingSequenceId(null);
+        }
+      }, elapsed);
+      timersRef.current.push(timer);
+    };
+    fire(0);
+  }
+
+  useEffect(() => stopSequence, []);
 
   useEffect(() => {
     if (syncSelectedId === undefined) return;
@@ -69,6 +111,23 @@ export function Viewer({ syncSelectedId }: ViewerProps = {}) {
   return (
     <div className="dy-viewer-main">
       <div className="dy-stage-col">
+        {project.sequences.length > 0 && (
+          <div className="dy-seq-play-bar">
+            {project.sequences.map((seq) => {
+              const playing = playingSequenceId === seq.id;
+              return (
+                <button
+                  key={seq.id}
+                  className={playing ? "playing" : ""}
+                  onClick={() => (playing ? stopSequence() : playSequence(seq))}
+                  disabled={seq.steps.length === 0}
+                >
+                  {playing ? "⏹" : "▶"} {seq.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
         {project.groups.length > 0 && (
           <div className="dy-legend">
             {project.groups.map((g) => {
@@ -83,7 +142,7 @@ export function Viewer({ syncSelectedId }: ViewerProps = {}) {
           </div>
         )}
         <Stage image={project.image}>
-          <CanvasObjectsView objects={project.objects} hotspots={project.hotspots} />
+          <CanvasObjectsView objects={project.objects} hotspots={project.hotspots} flashObjectId={flashObjectId} />
           <HotspotsLayer
             project={project}
             hoverId={hoverId}
