@@ -688,6 +688,163 @@ body {
   line-height: 1.5;
 }
 
+/* ---- Figma-style inspector: collapsible property sections ---- */
+
+.dy-inspector {
+  display: flex;
+  flex-direction: column;
+}
+
+.dy-insp-identity {
+  margin-bottom: 4px;
+}
+
+.dy-insp-section {
+  border-top: 1px solid var(--dy-editor-border);
+}
+
+.dy-insp-section:last-of-type {
+  border-bottom: 1px solid var(--dy-editor-border);
+}
+
+.dy-insp-section-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 2px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--dy-ink);
+  text-align: left;
+}
+
+.dy-insp-section-header:hover {
+  color: var(--dy-ink);
+  background: var(--dy-bg);
+}
+
+.dy-insp-chevron {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--dy-muted);
+  transition: transform 0.15s ease;
+  transform: rotate(0deg);
+}
+
+.dy-insp-chevron.open {
+  transform: rotate(90deg);
+}
+
+.dy-insp-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dy-muted);
+}
+
+.dy-insp-section-body {
+  padding: 2px 2px 14px;
+}
+
+/* Preset ("jeux de paramètres") grid — Figma effect-style swatches */
+
+.dy-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.dy-preset-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 4px;
+  border: 1px solid var(--dy-editor-border);
+  border-radius: 8px;
+  background: var(--dy-bg);
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--dy-ink);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.dy-preset-card:hover {
+  border-color: var(--dy-editor-border-hover);
+}
+
+.dy-preset-card.active {
+  border-color: var(--dy-ink);
+  background: var(--dy-panel-bg);
+}
+
+.dy-preset-swatch {
+  width: 36px;
+  height: 36px;
+  border-color: var(--dy-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dy-preset-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dy-ink);
+  animation: dy-preset-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes dy-preset-pulse {
+  0%,
+  100% {
+    transform: scale(0.7);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+
+.dy-preset-label {
+  font-size: 11px;
+  text-align: center;
+  line-height: 1.25;
+}
+
+/* Live, read-only generated CSS preview */
+
+.dy-insp-code-wrap {
+  position: relative;
+}
+
+.dy-insp-code {
+  margin: 0;
+  padding: 10px;
+  background: var(--dy-bg);
+  border: 1px solid var(--dy-editor-border);
+  border-radius: 8px;
+  font-family: var(--dy-font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--dy-ink);
+}
+
+.dy-insp-code-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
 .dy-step-editor {
   border: 1px solid var(--dy-editor-border);
   border-radius: 8px;

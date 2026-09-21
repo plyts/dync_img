@@ -1,5 +1,8 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 import type { Group, Hotspot, HotspotStyleOverride, InteractionSettings, StepContent } from "../../types";
+import { effectiveHotspotStyle } from "../../lib/geometry";
+import { STYLE_PRESETS } from "../../lib/stylePresets";
 
 interface InspectorProps {
   hotspot: Hotspot;
@@ -38,9 +41,8 @@ export function Inspector({
   const connectorMode: "inherit" | "none" | "custom" =
     hotspot.connector === undefined ? "inherit" : hotspot.connector === null ? "none" : "custom";
   return (
-    <div>
-      <h3>Fiche du bloc</h3>
-
+    <div className="dy-inspector">
+      <div className="dy-insp-identity">
       <div className="dy-field">
         <label>Nom</label>
         <input
@@ -109,7 +111,9 @@ export function Inspector({
           ))}
         </select>
       </div>
+      </div>
 
+      <Section title="Sélection & empilement" defaultOpen>
       <div className="dy-field">
         <label>Zones cliquables ({hotspot.areas.length})</label>
         {hotspot.areas.map((a, i) => (
@@ -163,8 +167,70 @@ export function Inspector({
           </button>
         </div>
       </div>
+      </Section>
 
-      <div className="dy-field">
+      <Section title="Presets de style" defaultOpen>
+        <p style={{ fontSize: 11, color: "var(--dy-muted)", margin: "0 0 8px" }}>
+          Un jeu de paramètres prêt à l'emploi — clique pour l'appliquer, puis affine chaque
+          réglage dans « Apparence » ci-dessous si besoin.
+        </p>
+        <PresetGrid
+          style={hotspot.style}
+          onApply={(patch) =>
+            onChange((h) => ({
+              ...h,
+              // an empty patch ("Défaut du projet") clears every override rather
+              // than merging as a no-op; any other preset merges its fields in.
+              style: Object.keys(patch).length === 0 ? {} : { ...h.style, ...patch },
+            }))
+          }
+        />
+      </Section>
+
+      <Section title="Apparence" defaultOpen>
+        <StyleOverridePanel
+          style={hotspot.style}
+          interaction={interaction}
+          onChange={(patch) => onChange((h) => ({ ...h, style: { ...h.style, ...patch } }))}
+          onReset={(key) =>
+            onChange((h) => {
+              const next = { ...h.style };
+              delete next[key];
+              return { ...h, style: next };
+            })
+          }
+        />
+      </Section>
+
+      <Section title="CSS">
+        <p style={{ fontSize: 11, color: "var(--dy-muted)", margin: "0 0 6px" }}>
+          Ce que ce bloc applique réellement, généré à partir des réglages ci-dessus — se met à
+          jour en direct.
+        </p>
+        <CssCodePreview hotspotId={hotspot.id} style={effectiveHotspotStyle(interaction, hotspot.style)} />
+        <div className="dy-field" style={{ marginTop: 10 }}>
+          <label>CSS avancé (bloc par bloc)</label>
+          <p style={{ fontSize: 11, color: "var(--dy-muted)", margin: "0 0 6px" }}>
+            Tout ce qui n'est pas couvert ci-dessus : n'importe quelle propriété CSS, sur ce bloc
+            uniquement. Utilise <code>&amp;</code> pour cibler ses propres états, ex.{" "}
+            <code>&amp;.hovered {"{"} stroke-width: 2; {"}"}</code> ou{" "}
+            <code>&amp;.selected {"{"} animation: spin 3s linear infinite; {"}"}</code>.
+          </p>
+          <textarea
+            rows={5}
+            value={hotspot.customCss}
+            onChange={(e) => {
+              const v = e.target.value;
+              onChange((h) => ({ ...h, customCss: v }));
+            }}
+            placeholder={"&.hovered {\n  stroke-width: 2;\n}"}
+            className="dy-code-textarea"
+          />
+        </div>
+      </Section>
+
+      <Section title="Connecteur">
+        <div className="dy-field">
         <label>Connecteur</label>
         <select
           value={connectorMode}
@@ -338,41 +404,10 @@ export function Inspector({
             </details>
           </div>
         )}
-      </div>
+        </div>
+      </Section>
 
-      <StyleOverridePanel
-        style={hotspot.style}
-        interaction={interaction}
-        onChange={(patch) => onChange((h) => ({ ...h, style: { ...h.style, ...patch } }))}
-        onReset={(key) =>
-          onChange((h) => {
-            const next = { ...h.style };
-            delete next[key];
-            return { ...h, style: next };
-          })
-        }
-      />
-
-      <div className="dy-field">
-        <label>CSS avancé (bloc par bloc)</label>
-        <p style={{ fontSize: 11, color: "var(--dy-muted)", margin: "0 0 6px" }}>
-          Tout ce qui n'est pas couvert ci-dessus : n'importe quelle propriété CSS, sur ce bloc
-          uniquement. Utilise <code>&amp;</code> pour cibler ses propres états, ex.{" "}
-          <code>&amp;.hovered {"{"} stroke-width: 2; {"}"}</code> ou{" "}
-          <code>&amp;.selected {"{"} animation: spin 3s linear infinite; {"}"}</code>.
-        </p>
-        <textarea
-          rows={5}
-          value={hotspot.customCss}
-          onChange={(e) => {
-            const v = e.target.value;
-            onChange((h) => ({ ...h, customCss: v }));
-          }}
-          placeholder={"&.hovered {\n  stroke-width: 2;\n}"}
-          className="dy-code-textarea"
-        />
-      </div>
-
+      <Section title="Contenu">
       <div className="dy-field">
         <label>Explorer aussi</label>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -459,9 +494,136 @@ export function Inspector({
           onChange={(tools) => onChange((h) => ({ ...h, content: { ...h.content, tools } }))}
         />
       </div>
+      </Section>
 
       <button className="dy-btn" onClick={onDelete} style={{ width: "100%" }}>
         Supprimer ce bloc
+      </button>
+    </div>
+  );
+}
+
+function Section({
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="dy-insp-section">
+      <button
+        type="button"
+        className="dy-insp-section-header"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        <span className={`dy-insp-chevron${open ? " open" : ""}`}>▸</span>
+        <span className="dy-insp-section-title">{title}</span>
+      </button>
+      {open && <div className="dy-insp-section-body">{children}</div>}
+    </div>
+  );
+}
+
+function PresetGrid({
+  style,
+  onApply,
+}: {
+  style: HotspotStyleOverride;
+  onApply: (patch: HotspotStyleOverride) => void;
+}) {
+  function matches(patch: HotspotStyleOverride) {
+    const keys = Object.keys(patch) as (keyof HotspotStyleOverride)[];
+    if (keys.length === 0) return Object.keys(style).length === 0;
+    return keys.every((k) => style[k] === patch[k]);
+  }
+
+  return (
+    <div className="dy-preset-grid">
+      {STYLE_PRESETS.map((preset) => {
+        const active = matches(preset.patch);
+        const showOutline = preset.patch.showOutline ?? true;
+        const radius = preset.patch.spotlightCornerRadius ?? 3;
+        const tint = preset.patch.hoverTintOpacity ?? 0.18;
+        const pulsing = preset.patch.pulseEnabled === true;
+        return (
+          <button
+            key={preset.id}
+            type="button"
+            className={`dy-preset-card${active ? " active" : ""}`}
+            title={preset.hint}
+            onClick={() => onApply(preset.patch)}
+          >
+            <span
+              className="dy-preset-swatch"
+              style={{
+                borderStyle: showOutline ? "dashed" : "none",
+                borderWidth: showOutline ? Math.max(1, (preset.patch.selectionStrokeWidth ?? 0.9) * 2) : 0,
+                borderRadius: Math.max(2, radius * 2),
+                background: `color-mix(in srgb, var(--dy-ink) ${Math.round(tint * 100)}%, transparent)`,
+              }}
+            >
+              {pulsing && <span className="dy-preset-pulse-dot" />}
+            </span>
+            <span className="dy-preset-label">{preset.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function CssCodePreview({
+  hotspotId,
+  style,
+}: {
+  hotspotId: string;
+  style: ReturnType<typeof effectiveHotspotStyle>;
+}) {
+  const [copied, setCopied] = useState(false);
+  const scope = `hs-${hotspotId}`;
+  const lines = [
+    `.${scope} {`,
+    `  --dy-dash: ${style.showOutline ? style.dashPattern : "none"};`,
+    `  --dy-selection-stroke-width: ${style.selectionStrokeWidth};`,
+    `  --dy-corner-radius: ${style.spotlightCornerRadius};`,
+    `  --dy-hover-tint: ${style.hoverTintOpacity};`,
+    `  outline: ${style.showOutline ? "dashed" : "none"};`,
+    `}`,
+  ];
+  if (style.pulseEnabled) {
+    lines.push(
+      "",
+      `.${scope} .dy-pulse {`,
+      `  --dy-pulse-min: ${style.pulseMinRadius};`,
+      `  --dy-pulse-max: ${style.pulseMaxRadius};`,
+      `  animation-duration: ${style.pulseSpeedMs}ms;`,
+      `}`,
+    );
+  }
+  const css = lines.join("\n");
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(css);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      // clipboard unavailable (e.g. insecure context) — silently ignore
+    }
+  }
+
+  return (
+    <div className="dy-insp-code-wrap">
+      <pre className="dy-insp-code">
+        <code>{css}</code>
+      </pre>
+      <button type="button" className="dy-btn dy-insp-code-copy" onClick={copy}>
+        {copied ? "Copié ✓" : "Copier"}
       </button>
     </div>
   );
