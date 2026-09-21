@@ -78,11 +78,19 @@ type HotspotShape =
   | { kind: "rect"; x: number; y: number; w: number; h: number }
   | { kind: "polygon"; points: { x: number; y: number }[] };
 
+interface Connector {
+  to: { x: number; y: number };          // point d'arrivée dans l'image
+  toShape: HotspotShape | null;          // zone qui s'éclaire à l'arrivée (optionnel)
+}
+
 interface Hotspot {
   id: string; label: string; color: string; groupId: string | null;
-  order: number;              // position dans la navigation Précédent/Suivant
-  shape: HotspotShape;         // toujours en % (0-100), jamais en pixels
-  anchor: { x: number; y: number }; // point de départ de la ligne connectrice
+  order: number;                 // position dans la navigation Précédent/Suivant
+  areas: HotspotShape[];         // zones cliquables (souvent une seule) — toujours en %
+  spotlightShape: HotspotShape | null; // ce qui s'éclaire ; null = union des `areas`
+  anchor: { x: number; y: number };     // point de départ de la ligne connectrice
+  connector?: Connector | null;  // undefined = hérite du groupe, null = aucun, objet = override
+  seeAlso: string[];             // ids d'autres blocs proposés en "Explorer aussi"
   content: {
     summary: string;
     steps: { id: string; title: string; body: string }[]; // le "A à Z"
@@ -90,12 +98,20 @@ interface Hotspot {
   };
 }
 
+interface Group {
+  id: string; label: string; color: string;
+  connector: Connector | null;   // hérité par tous les blocs du groupe sauf override
+}
+
 interface Project {
-  schemaVersion: 1;
+  schemaVersion: 2;
   image: { src: string; width: number; height: number; alt: string };
-  groups: Group[];             // familles/catégories, utilisées comme légende
+  groups: Group[];               // familles/catégories, utilisées comme légende
   hotspots: Hotspot[];
-  theme: { palette: string[]; fontDisplay: string; fontMono: string; panelSide: "left" | "right" };
+  theme: {
+    palette: string[]; fontDisplay: string; fontMono: string; panelSide: "left" | "right";
+    interaction: { /* tout ce que règle le panneau Style — voir §13 */ };
+  };
 }
 ```
 
@@ -103,6 +119,15 @@ interface Project {
 affichée à n'importe quelle taille (mobile, grand écran, export HTML). Une
 zone à `x: 20, y: 10, w: 15, h: 12` reste au bon endroit quelle que soit la
 résolution — pas besoin de recalculer quoi que ce soit au redimensionnement.
+
+**`areas` vs `spotlightShape`, et pourquoi c'est séparé du contenu.** Un
+bloc "vue d'ensemble" (ex. une famille de techniques) peut n'avoir qu'un
+petit titre cliquable (`areas`) tout en éclairant tout son cadre au clic
+(`spotlightShape`) — c'est la technique pour construire des **blocs
+imbriqués** sans avoir besoin d'un champ parent/enfant explicite : l'imbrication
+est géométrique (voir §13). Les anciens projets (`schemaVersion: 1`, avec un
+seul champ `shape`) sont migrés automatiquement à l'import
+(`lib/projectIO.ts`, fonction `migrateV1ToV2`).
 
 ## 4. Fidélité à l'image source
 
@@ -201,35 +226,62 @@ JSON du projet, aucune modification de code.
 ## 9. Assistant IA (optionnel) — `lib/ai.ts`
 
 Fonctionnalité facultative : avec ta propre clé API Anthropic, l'outil peut
-(a) repérer automatiquement les blocs d'une image et (b) rédiger la fiche
-"de A à Z" d'un bloc. La clé n'est envoyée qu'à `api.anthropic.com`, jamais
-stockée ailleurs qu'en mémoire du navigateur (avec option explicite de
-sauvegarde en `localStorage`). Les deux prompts système utilisés sont exportés
-en constantes dans le code (donc visibles, éditables, et affichés dans la
-modale via "Voir le prompt envoyé à l'IA") :
+(a) repérer automatiquement les blocs d'une image — avec zones multiples et
+spotlight quand pertinent — (b) rédiger la fiche "de A à Z" d'un bloc, et
+(c) réanalyser une seule région recadrée avec des instructions libres (bouton
+**🔍 Affiner une zone**). La clé n'est envoyée qu'à `api.anthropic.com`,
+jamais stockée ailleurs qu'en mémoire du navigateur (avec option explicite de
+sauvegarde en `localStorage`). Tous les prompts système sont exportés en
+constantes dans le code (donc visibles, éditables, et affichés dans la modale
+via "Voir le prompt envoyé à l'IA") :
 
 **Détection des blocs — prompt système :**
 ```
 Tu es un assistant qui prépare des schémas interactifs.
-On te donne l'image d'une architecture, d'un diagramme ou d'un schéma technique.
-Ta tâche : repérer les blocs/composants visuellement distincts (boîtes, cadres,
-zones nommées, icônes légendées) et proposer une zone cliquable rectangulaire
-pour chacun.
+On te donne l'image d'une architecture, d'un diagramme ou d'un schéma technique
+(éventuellement recadrée sur une seule région si l'utilisateur veut l'affiner).
+Ta tâche : repérer les blocs/composants visuellement distincts et proposer,
+pour chacun, une ou plusieurs zones cliquables rectangulaires.
 
 Règles :
-- Coordonnées en pourcentage de l'image (0 à 100), x/y = coin haut-gauche, w/h = largeur/hauteur.
-- Un bloc = un élément identifiable une seule fois (ne découpe pas un même cadre en plusieurs zones).
+- Coordonnées en pourcentage de l'image fournie (0 à 100), x/y = coin haut-gauche, w/h = largeur/hauteur.
+- La plupart des blocs n'ont besoin que d'une seule zone dans "areas".
+- Utilise plusieurs zones dans "areas" UNIQUEMENT quand un même bloc logique doit être
+  cliquable à plusieurs endroits distincts de l'image (ex. un titre de famille + les
+  nœuds du pipeline qu'elle alimente).
+- Si le bloc a plusieurs zones ET qu'un cadre visuel plus large doit s'éclairer
+  quand on clique sur n'importe laquelle d'entre elles, fournis "spotlight"
+  (un rectangle qui englobe visuellement le bloc). Sinon omets "spotlight"
+  (l'union des "areas" sera utilisée automatiquement).
 - "label" = le texte visible sur le bloc, ou un nom court si aucun texte n'est visible.
+- "groupLabel" = le nom de la famille/catégorie visuelle à laquelle le bloc appartient, si le
+  schéma a des regroupements colorés/encadrés ; sinon omets ce champ.
 - "order" = un entier reflétant l'ordre logique de lecture ou de pipeline (gauche->droite, haut->bas).
+- Ne fais JAMAIS chevaucher les zones cliquables de deux blocs différents.
 - Réponds UNIQUEMENT avec un JSON valide, sans texte autour, au format :
-{"hotspots": [{"label": string, "order": number, "shape": {"x": number, "y": number, "w": number, "h": number}}]}
+{"hotspots": [{
+  "label": string,
+  "order": number,
+  "groupLabel"?: string,
+  "areas": [{"x": number, "y": number, "w": number, "h": number}],
+  "spotlight"?: {"x": number, "y": number, "w": number, "h": number}
+}]}
 ```
-Prompt utilisateur (généré par `buildHotspotDetectionUserPrompt`) :
+Prompt utilisateur (généré par `buildHotspotDetectionUserPrompt`), pour l'image entière :
 ```
 Analyse cette image et détecte tous les blocs/composants qu'elle contient.
-[+ précisions optionnelles de l'utilisateur]
+[+ instruction de l'utilisateur]
 Réponds uniquement avec le JSON demandé.
 ```
+Ou, quand une région a été recadrée via **🔍 Affiner une zone** :
+```
+Cette image est un recadrage d'une zone précise du schéma original. Redécoupe UNIQUEMENT cette zone selon l'instruction ci-dessous.
+[+ instruction de l'utilisateur]
+Réponds uniquement avec le JSON demandé.
+```
+Le recadrage se fait côté client (`cropImageDataUrl`, via `<canvas>`) avant
+l'envoi, et les coordonnées renvoyées par l'IA sont remappées automatiquement
+vers l'image complète au retour (`detectHotspotsFromImage`).
 
 **Rédaction du contenu d'un bloc — prompt système :**
 ```
@@ -367,6 +419,18 @@ l'étendre.
 - Le fichier exporté par "Export HTML autonome" a été rouvert dans un
   navigateur headless et testé de la même façon : survol, clic, panneau,
   navigation, fermeture — aucune erreur.
+- Re-testé sur le vrai schéma RAG de l'utilisateur (13 zones, dont des blocs
+  imbriqués zone/spotlight et des connecteurs de groupe) : import JSON,
+  survol, sélection d'une zone-titre qui allume tout le cadre, connecteur de
+  groupe (ligne + point animé + halo d'arrivée), liens "Explorer aussi",
+  export HTML autonome re-testé indépendamment.
+- Un bug réel a été trouvé et corrigé pendant ce test : dans l'export HTML
+  autonome (pas dans l'app React), le panneau se reconstruisait entièrement à
+  chaque survol au lieu de seulement au changement de sélection — ça cassait
+  les animations et pouvait faire "disparaître" un bouton "Explorer aussi"
+  sous la souris avant le clic. Corrigé en ne reconstruisant le panneau (et en
+  ne relançant la ligne connectrice / le connecteur de groupe) que lorsque
+  l'identifiant du bloc sélectionné change réellement (`lib/exportBundle.ts`).
 
 ## 12. Utiliser l'outil avec ta propre image
 
@@ -384,8 +448,59 @@ l'étendre.
    rédiger le contenu (nécessite ta clé API Anthropic).
 5. **⭳ Exporter JSON** pour sauvegarder/rééditer plus tard, **⭳ Export HTML
    autonome** pour obtenir la page finale partageable.
+6. **🎨 Style** pour peaufiner le survol, la sélection, les animations ; voir
+   §13 pour tout ce qui est réglable après le chargement de l'image, avant
+   l'export.
 
-## 13. Limites connues et pistes
+## 13. Aller plus loin : zones multiples, spotlight, connecteurs, style réglable
+
+Tout ce qui suit reste modifiable à n'importe quel moment — avant ou après
+avoir chargé ton image, avant ou après avoir généré du contenu, avant
+l'export final. Rien n'est figé une fois une zone dessinée.
+
+**Zones cliquables (`areas`) vs. ce qui s'éclaire (`spotlightShape`).** Un
+bloc peut avoir plusieurs zones cliquables (utile pour un titre de famille +
+plusieurs points qu'il ouvre) mais une seule "surbrillance" — par défaut
+l'union de ses zones, ou une forme personnalisée plus grande. C'est ce qui
+permet des **blocs imbriqués** : dans l'Inspecteur, dessine une petite zone
+cliquable (ex. juste le titre d'un cadre), puis **"Dessiner un spotlight
+personnalisé"** pour que tout le cadre s'allume au clic — sans que le cadre
+lui-même ne soit cliquable. **↥ Devant / ↧ Derrière** contrôlent l'ordre
+d'empilement quand deux zones se chevauchent (la dernière dessinée reçoit le
+clic ; utile si un bloc englobe visuellement des sous-blocs).
+
+**Connecteurs.** Un groupe peut avoir une ligne + point animé + onde
+d'arrivée vers un point du schéma (ex. une famille de techniques qui relie
+vers le nœud du pipeline qu'elle alimente), avec en option une seconde zone
+qui s'éclaire à l'arrivée. Chaque bloc peut **hériter** ce connecteur de son
+groupe, le **désactiver**, ou le **remplacer** par le sien (Inspecteur →
+"Connecteur").
+
+**Explorer aussi.** Dans l'Inspecteur, coche les blocs à proposer comme liens
+de navigation croisée en bas de la fiche (ex. relier une famille de
+techniques aux nœuds du pipeline qu'elle utilise).
+
+**Panneau Style (🎨).** Expose tout ce qui pilotait auparavant le survol et
+la sélection en dur dans le CSS : opacité de la teinte au survol/sélection,
+motif des pointillés, épaisseur du contour, opacité du voile, pastilles
+pulsantes (on/off, taille, vitesse), vitesse et arrondi du "trou de lumière",
+vitesse du point/des ondes sur les connecteurs, rythme des étapes "de A à Z",
+vitesse de frappe de l'exemple, largeur et sens (gauche/droite) du panneau,
+et si le focus clavier (Tab) déclenche les mêmes effets que le survol. Tout
+est stocké dans `project.theme.interaction` (voir `types.ts`) et appliqué en
+variables CSS (`lib/interactionVars.ts`) — aussi bien dans l'app que dans le
+fichier HTML exporté, qui reste donc fidèle à tes réglages.
+
+**Affiner le découpage par IA.** Le bouton **🔍 Affiner une zone (IA)** de la
+barre d'outils laisse dessiner un rectangle autour d'une seule zone du
+schéma ; l'assistant IA analyse alors uniquement ce recadrage (image
+rognée côté client avant l'envoi, coordonnées remappées automatiquement vers
+l'image complète au retour) avec tes instructions libres, par exemple
+*"découpe cette zone en 4 sous-blocs, un par technique listée"*. Utile pour
+redécouper un bloc que la détection automatique globale a fusionné à tort,
+sans repartir de zéro.
+
+## 14. Limites connues et pistes
 
 - Les polygones n'ont pas d'ajout/suppression de sommet après création
   (il faut redessiner) — simple à ajouter si besoin (double-clic sur un bord).

@@ -3,13 +3,38 @@ import type { Group, Hotspot, StepContent } from "../../types";
 
 interface InspectorProps {
   hotspot: Hotspot;
+  allHotspots: Hotspot[];
   groups: Group[];
   palette: string[];
   onChange: (updater: (h: Hotspot) => Hotspot) => void;
   onDelete: () => void;
+  onRemoveArea: (index: number) => void;
+  onStartAddArea: () => void;
+  onStartSetSpotlight: () => void;
+  onResetSpotlight: () => void;
+  onStartConnectorShape: () => void;
+  onBringToFront: () => void;
+  onSendToBack: () => void;
 }
 
-export function Inspector({ hotspot, groups, palette, onChange, onDelete }: InspectorProps) {
+export function Inspector({
+  hotspot,
+  allHotspots,
+  groups,
+  palette,
+  onChange,
+  onDelete,
+  onRemoveArea,
+  onStartAddArea,
+  onStartSetSpotlight,
+  onResetSpotlight,
+  onStartConnectorShape,
+  onBringToFront,
+  onSendToBack,
+}: InspectorProps) {
+  const group = groups.find((g) => g.id === hotspot.groupId) ?? null;
+  const connectorMode: "inherit" | "none" | "custom" =
+    hotspot.connector === undefined ? "inherit" : hotspot.connector === null ? "none" : "custom";
   return (
     <div>
       <h3>Fiche du bloc</h3>
@@ -71,6 +96,145 @@ export function Inspector({ hotspot, groups, palette, onChange, onDelete }: Insp
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="dy-field">
+        <label>Zones cliquables ({hotspot.areas.length})</label>
+        {hotspot.areas.map((a, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, marginBottom: 4 }}>
+            <span style={{ flex: 1 }}>
+              Zone {i + 1} — {a.kind === "rect" ? "rectangle" : `polygone (${a.points.length} pts)`}
+            </span>
+            {hotspot.areas.length > 1 && (
+              <button className="dy-btn" onClick={() => onRemoveArea(i)} aria-label={`Supprimer la zone ${i + 1}`}>
+                ✕
+              </button>
+            )}
+          </div>
+        ))}
+        <button className="dy-btn" onClick={onStartAddArea} style={{ width: "100%" }}>
+          + Ajouter une zone (dessiner)
+        </button>
+        <p style={{ fontSize: 11, color: "var(--dy-muted)", margin: "4px 0 0" }}>
+          Plusieurs zones peuvent ouvrir la même fiche — utile pour un bloc « vue d'ensemble » (ex.
+          le titre + les nœuds du pipeline qu'il alimente).
+        </p>
+      </div>
+
+      <div className="dy-field">
+        <label>Spotlight (ce qui s'éclaire)</label>
+        <p style={{ fontSize: 12, margin: "0 0 6px" }}>
+          {hotspot.spotlightShape
+            ? "Zone personnalisée définie."
+            : "Par défaut : l'union des zones cliquables ci-dessus."}
+        </p>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button className="dy-btn" onClick={onStartSetSpotlight} style={{ flex: 1 }}>
+            {hotspot.spotlightShape ? "Redessiner" : "Dessiner un spotlight personnalisé"}
+          </button>
+          {hotspot.spotlightShape && (
+            <button className="dy-btn" onClick={onResetSpotlight}>
+              Réinitialiser
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="dy-field">
+        <label>Empilement (blocs imbriqués)</label>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button className="dy-btn" onClick={onBringToFront} style={{ flex: 1 }}>
+            ↥ Devant
+          </button>
+          <button className="dy-btn" onClick={onSendToBack} style={{ flex: 1 }}>
+            ↧ Derrière
+          </button>
+        </div>
+      </div>
+
+      <div className="dy-field">
+        <label>Connecteur</label>
+        <select
+          value={connectorMode}
+          onChange={(e) => {
+            const mode = e.target.value as "inherit" | "none" | "custom";
+            if (mode === "inherit") {
+              onChange((h) => {
+                const { connector: _drop, ...rest } = h;
+                return rest as Hotspot;
+              });
+            } else if (mode === "none") {
+              onChange((h) => ({ ...h, connector: null }));
+            } else {
+              onChange((h) => ({ ...h, connector: { to: { ...h.anchor }, toShape: null } }));
+            }
+          }}
+        >
+          <option value="inherit">Hérite du groupe{group ? ` (${group.label})` : " (aucun)"}</option>
+          <option value="none">Aucun</option>
+          <option value="custom">Personnalisé</option>
+        </select>
+        {connectorMode === "custom" && hotspot.connector && (
+          <div style={{ marginTop: 6 }}>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                type="number"
+                value={Math.round(hotspot.connector.to.x)}
+                onChange={(e) =>
+                  onChange((h) => ({
+                    ...h,
+                    connector: h.connector ? { ...h.connector, to: { ...h.connector.to, x: Number(e.target.value) } } : h.connector,
+                  }))
+                }
+                style={{ width: "50%" }}
+              />
+              <input
+                type="number"
+                value={Math.round(hotspot.connector.to.y)}
+                onChange={(e) =>
+                  onChange((h) => ({
+                    ...h,
+                    connector: h.connector ? { ...h.connector, to: { ...h.connector.to, y: Number(e.target.value) } } : h.connector,
+                  }))
+                }
+                style={{ width: "50%" }}
+              />
+            </div>
+            <p style={{ fontSize: 11, color: "var(--dy-muted)", margin: "4px 0" }}>
+              Point d'arrivée en % (x, y). Optionnel : dessine aussi une zone qui s'éclaire à
+              l'arrivée.
+            </p>
+            <button className="dy-btn" onClick={onStartConnectorShape} style={{ width: "100%" }}>
+              {hotspot.connector.toShape ? "Redessiner la zone d'arrivée" : "+ Zone qui s'éclaire à l'arrivée"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="dy-field">
+        <label>Explorer aussi</label>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {allHotspots
+            .filter((h) => h.id !== hotspot.id)
+            .map((h) => {
+              const active = hotspot.seeAlso.includes(h.id);
+              return (
+                <button
+                  key={h.id}
+                  className="dy-btn"
+                  style={active ? { background: "var(--dy-ink)", color: "var(--dy-bg)" } : undefined}
+                  onClick={() =>
+                    onChange((hh) => ({
+                      ...hh,
+                      seeAlso: active ? hh.seeAlso.filter((id) => id !== h.id) : [...hh.seeAlso, h.id],
+                    }))
+                  }
+                >
+                  {h.label || "Sans nom"}
+                </button>
+              );
+            })}
+        </div>
       </div>
 
       <div className="dy-field">

@@ -78,6 +78,7 @@ export function Viewer() {
         onPrev={() => step(-1)}
         onNext={() => step(1)}
         onReplay={() => setPlayKey((k) => k + 1)}
+        onSelect={select}
       />
     </div>
   );

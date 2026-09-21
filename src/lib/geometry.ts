@@ -138,6 +138,39 @@ export function resizeRect(
   return { ...shape, x, y, w, h };
 }
 
+export function unionBoundingBox(shapes: HotspotShape[]) {
+  const boxes = shapes.map(boundingBox);
+  const x1 = Math.min(...boxes.map((b) => b.x1));
+  const y1 = Math.min(...boxes.map((b) => b.y1));
+  const x2 = Math.max(...boxes.map((b) => b.x2));
+  const y2 = Math.max(...boxes.map((b) => b.y2));
+  return { x1, y1, x2, y2, w: x2 - x1, h: y2 - y1 };
+}
+
+export function unionRectShape(shapes: HotspotShape[]): HotspotShape {
+  const box = unionBoundingBox(shapes);
+  return { kind: "rect", x: box.x1, y: box.y1, w: box.w, h: box.h };
+}
+
+export function pointInAnyShape(shapes: HotspotShape[], pt: Point): boolean {
+  return shapes.some((s) => pointInShape(s, pt));
+}
+
+/** What actually lights up: the explicit spotlight, or the union of all
+ *  clickable areas when none was set (the common single-area case). */
+export function effectiveSpotlight(
+  areas: HotspotShape[],
+  spotlightShape: HotspotShape | null,
+): HotspotShape {
+  return spotlightShape ?? unionRectShape(areas);
+}
+
+export function centroidOfAreas(areas: HotspotShape[]): Point {
+  const pts = areas.map(centroid);
+  const sum = pts.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+  return { x: sum.x / pts.length, y: sum.y / pts.length };
+}
+
 export function polygonSignedArea(points: Point[]): number {
   let area = 0;
   for (let i = 0; i < points.length; i++) {

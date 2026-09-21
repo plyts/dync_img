@@ -95,9 +95,9 @@ export function buildSampleProject(): Project {
   };
 
   const groups: Group[] = [
-    { id: crypto.randomUUID(), label: "Entrée", color: project.theme.palette[0] },
-    { id: crypto.randomUUID(), label: "Traitement", color: project.theme.palette[2] },
-    { id: crypto.randomUUID(), label: "Persistance", color: project.theme.palette[4] },
+    { id: crypto.randomUUID(), label: "Entrée", color: project.theme.palette[0], connector: null },
+    { id: crypto.randomUUID(), label: "Traitement", color: project.theme.palette[2], connector: null },
+    { id: crypto.randomUUID(), label: "Persistance", color: project.theme.palette[4], connector: null },
   ];
   project.groups = groups;
 
@@ -224,8 +224,10 @@ export function buildSampleProject(): Project {
       color: d.color,
       groupId: d.groupId,
       order: i,
-      shape: { kind: "rect", x: block.x, y: block.y, w: block.w, h: block.h },
+      areas: [{ kind: "rect" as const, x: block.x, y: block.y, w: block.w, h: block.h }],
+      spotlightShape: null,
       anchor: { x: cx, y: cy },
+      seeAlso: [],
       content: d.content,
     };
   });

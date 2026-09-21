@@ -9,6 +9,7 @@ interface DetailPanelProps {
   onPrev: () => void;
   onNext: () => void;
   onReplay: () => void;
+  onSelect: (id: string) => void;
 }
 
 export function DetailPanel({
@@ -19,9 +20,16 @@ export function DetailPanel({
   onPrev,
   onNext,
   onReplay,
+  onSelect,
 }: DetailPanelProps) {
   const open = Boolean(hotspot);
   const group = hotspot ? project.groups.find((g) => g.id === hotspot.groupId) : null;
+  const { stepStaggerMs, typewriterSpeedMs } = project.theme.interaction;
+  const seeAlso = hotspot
+    ? hotspot.seeAlso
+        .map((id) => project.hotspots.find((h) => h.id === id))
+        .filter((h): h is Hotspot => Boolean(h))
+    : [];
 
   return (
     <aside className={`dy-panel${open ? " open" : ""}`}>
@@ -46,7 +54,7 @@ export function DetailPanel({
                     <li
                       key={step.id}
                       className="dy-step"
-                      style={{ animationDelay: `${i * 0.15}s`, paddingLeft: 8 }}
+                      style={{ animationDelay: `${(i * stepStaggerMs) / 1000}s`, paddingLeft: 8 }}
                     >
                       <h4>{step.title}</h4>
                       <p>{step.body}</p>
@@ -61,7 +69,8 @@ export function DetailPanel({
                 <h3 className="dy-block-title">Exemple</h3>
                 <TypedExample
                   text={hotspot.content.example}
-                  delay={hotspot.content.steps.length * 150 + 300}
+                  delay={hotspot.content.steps.length * stepStaggerMs + 300}
+                  speed={typewriterSpeedMs}
                 />
               </div>
             )}
@@ -90,6 +99,20 @@ export function DetailPanel({
                 </div>
               </div>
             )}
+
+            {seeAlso.length > 0 && (
+              <div>
+                <h3 className="dy-block-title">Explorer aussi</h3>
+                <div className="dy-tools">
+                  {seeAlso.map((h) => (
+                    <button key={h.id} className="dy-see-also" onClick={() => onSelect(h.id)}>
+                      <span className="dy-legend-dot" style={{ background: h.color }} />
+                      {h.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <div className="dy-panel-footer">
             <button className="dy-btn" onClick={onPrev}>
@@ -109,7 +132,7 @@ export function DetailPanel({
   );
 }
 
-function TypedExample({ text, delay }: { text: string; delay: number }) {
-  const shown = useTypewriter(text, delay);
+function TypedExample({ text, delay, speed }: { text: string; delay: number; speed: number }) {
+  const shown = useTypewriter(text, delay, speed);
   return <div className="dy-example">{shown || " "}</div>;
 }

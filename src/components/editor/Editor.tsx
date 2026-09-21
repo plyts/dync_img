@@ -1,21 +1,27 @@
 import { useRef, useState } from "react";
 import { useProject } from "../../state/store";
 import { Stage } from "../Stage";
-import { DrawLayer, type Tool } from "./DrawLayer";
+import { DrawLayer, type DrawMode, type Tool } from "./DrawLayer";
 import { HotspotList } from "./HotspotList";
 import { Inspector } from "./Inspector";
 import { GroupsPanel } from "./GroupsPanel";
+import { StylePanel } from "./StylePanel";
 import { AIAssistModal } from "./AIAssistModal";
 import { readImageFile, exportProjectJson, readProjectFile, downloadTextFile } from "../../lib/projectIO";
 import { buildStandaloneHtml } from "../../lib/exportBundle";
-import type { Hotspot } from "../../types";
+import { boundingBox } from "../../lib/geometry";
+import type { PercentRect } from "../../lib/ai";
+import type { HotspotShape, InteractionSettings, ProjectTheme } from "../../types";
 
 export function Editor() {
   const store = useProject();
   const { project } = store;
   const [tool, setTool] = useState<Tool>("select");
+  const [drawMode, setDrawMode] = useState<DrawMode>("new");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
+  const [aiRegion, setAiRegion] = useState<PercentRect | null>(null);
+  const [styleOpen, setStyleOpen] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
 
@@ -32,6 +38,28 @@ export function Editor() {
     setSelectedId(null);
   }
 
+  function updateInteraction(patch: Partial<InteractionSettings>) {
+    store.update((p) => ({
+      ...p,
+      theme: { ...p.theme, interaction: { ...p.theme.interaction, ...patch } },
+    }));
+  }
+
+  function updateTheme(patch: Partial<ProjectTheme>) {
+    store.update((p) => ({ ...p, theme: { ...p.theme, ...patch } }));
+  }
+
+  const drawModeLabel =
+    drawMode === "add-area"
+      ? "+ Zone…"
+      : drawMode === "spotlight"
+        ? "Spotlight…"
+        : drawMode === "connector-shape"
+          ? "Zone d'arrivée…"
+          : drawMode === "ai-region"
+            ? "Zone IA…"
+            : "Dessin";
+
   return (
     <div className="dy-editor">
       <div className="dy-topbar" style={{ borderTop: "none" }}>
@@ -47,6 +75,15 @@ export function Editor() {
               ⬡ Polygone
             </button>
           </div>
+          {drawMode !== "new" && (
+            <button
+              className="dy-btn"
+              onClick={() => setDrawMode("new")}
+              title="Revenir au dessin de nouveaux blocs"
+            >
+              {drawModeLabel} ✕
+            </button>
+          )}
           <button className="dy-btn" onClick={store.undo} disabled={!store.canUndo}>
             ↺ Annuler
           </button>
@@ -90,31 +127,74 @@ export function Editor() {
           >
             ⭳ Export HTML autonome
           </button>
-          <button className="dy-btn primary" onClick={() => setAiOpen(true)}>
+          <button className="dy-btn" onClick={() => setStyleOpen(true)}>
+            🎨 Style
+          </button>
+          <button
+            className="dy-btn"
+            onClick={() => {
+              setAiRegion(null);
+              setDrawMode("ai-region");
+              if (tool === "select") setTool("rect");
+            }}
+            disabled={!project.image.src}
+          >
+            🔍 Affiner une zone (IA)
+          </button>
+          <button
+            className="dy-btn primary"
+            onClick={() => {
+              setAiRegion(null);
+              setAiOpen(true);
+            }}
+          >
             ✨ Assistant IA
           </button>
         </div>
       </div>
 
       <div className="dy-editor-main">
-        <div className="dy-stage-col">
+        <div className="dy-stage-col" style={{ position: "relative" }}>
           <Stage image={project.image} emptyState="Charge une image (PNG, JPEG, SVG…) pour commencer.">
             <DrawLayer
               hotspots={project.hotspots}
               selectedId={selectedId}
               tool={tool}
+              drawMode={drawMode}
               onSelect={setSelectedId}
               onCreate={(shape) => {
                 const created = store.addHotspot(shape);
                 setSelectedId(created.id);
               }}
-              onCommitShape={(id, shape) =>
-                store.updateHotspot(id, (h) => ({ ...h, shape }))
+              onAddArea={(id, shape) =>
+                store.updateHotspot(id, (h) => ({ ...h, areas: [...h.areas, shape] }))
               }
-              onCommitAnchor={(id, anchor) =>
-                store.updateHotspot(id, (h) => ({ ...h, anchor }))
+              onSetSpotlight={(id, shape) =>
+                store.updateHotspot(id, (h) => ({ ...h, spotlightShape: shape }))
               }
+              onSetConnectorShape={(id, shape) =>
+                store.updateHotspot(id, (h) => ({
+                  ...h,
+                  connector: h.connector ? { ...h.connector, toShape: shape } : { to: h.anchor, toShape: shape },
+                }))
+              }
+              onPickAIRegion={(shape) => {
+                const box = boundingBox(shape);
+                setAiRegion({ x: box.x1, y: box.y1, w: box.w, h: box.h });
+                setAiOpen(true);
+              }}
+              onCommitAreaShape={(id, index, shape) =>
+                store.updateHotspot(id, (h) => ({
+                  ...h,
+                  areas: h.areas.map((a, i) => (i === index ? shape : a)),
+                }))
+              }
+              onCommitSpotlightShape={(id, shape) =>
+                store.updateHotspot(id, (h) => ({ ...h, spotlightShape: shape }))
+              }
+              onCommitAnchor={(id, anchor) => store.updateHotspot(id, (h) => ({ ...h, anchor }))}
               onToolChange={setTool}
+              onDrawModeChange={setDrawMode}
             />
           </Stage>
         </div>
@@ -130,6 +210,7 @@ export function Editor() {
           {selected && (
             <Inspector
               hotspot={selected}
+              allHotspots={project.hotspots}
               groups={project.groups}
               palette={project.theme.palette}
               onChange={(updater) => store.updateHotspot(selected.id, updater)}
@@ -137,6 +218,29 @@ export function Editor() {
                 store.removeHotspot(selected.id);
                 setSelectedId(null);
               }}
+              onRemoveArea={(index) =>
+                store.updateHotspot(selected.id, (h) => ({
+                  ...h,
+                  areas: h.areas.filter((_, i) => i !== index),
+                }))
+              }
+              onStartAddArea={() => {
+                setDrawMode("add-area");
+                if (tool === "select") setTool("rect");
+              }}
+              onStartSetSpotlight={() => {
+                setDrawMode("spotlight");
+                if (tool === "select") setTool("rect");
+              }}
+              onResetSpotlight={() =>
+                store.updateHotspot(selected.id, (h) => ({ ...h, spotlightShape: null }))
+              }
+              onStartConnectorShape={() => {
+                setDrawMode("connector-shape");
+                if (tool === "select") setTool("rect");
+              }}
+              onBringToFront={() => store.bringToFront(selected.id)}
+              onSendToBack={() => store.sendToBack(selected.id)}
             />
           )}
 
@@ -150,26 +254,55 @@ export function Editor() {
         </div>
       </div>
 
+      {styleOpen && (
+        <StylePanel
+          theme={project.theme}
+          onChangeInteraction={updateInteraction}
+          onChangeTheme={updateTheme}
+          onClose={() => setStyleOpen(false)}
+        />
+      )}
+
       {aiOpen && (
         <AIAssistModal
           project={project}
           selectedLabel={selected?.label ?? null}
+          initialRegion={aiRegion}
+          onClearRegion={() => setAiRegion(null)}
           onClose={() => setAiOpen(false)}
           onImportDetected={(detectedList) => {
-            const created = store.addHotspots(
-              detectedList.map(
-                (d): Hotspot["shape"] => ({
-                  kind: "rect",
-                  x: d.shape.x,
-                  y: d.shape.y,
-                  w: d.shape.w,
-                  h: d.shape.h,
-                }),
-              ),
+            const rectShape = (r: { x: number; y: number; w: number; h: number }): HotspotShape => ({
+              kind: "rect",
+              x: r.x,
+              y: r.y,
+              w: r.w,
+              h: r.h,
+            });
+
+            const groupIdByLabel = new Map<string, string>();
+            for (const g of project.groups) groupIdByLabel.set(g.label.toLowerCase(), g.id);
+            for (const d of detectedList) {
+              const key = d.groupLabel?.trim().toLowerCase();
+              if (key && !groupIdByLabel.has(key)) {
+                const created = store.addGroup(d.groupLabel!.trim());
+                groupIdByLabel.set(key, created.id);
+              }
+            }
+
+            const created = store.addHotspotsBatch(
+              detectedList.map((d) => ({
+                areas: d.areas.map(rectShape),
+                spotlightShape: d.spotlight ? rectShape(d.spotlight) : null,
+              })),
             );
             created.forEach((h, i) => {
-              const label = detectedList[i].label;
-              store.updateHotspot(h.id, (hotspot) => ({ ...hotspot, label }));
+              const d = detectedList[i];
+              const key = d.groupLabel?.trim().toLowerCase();
+              store.updateHotspot(h.id, (hotspot) => ({
+                ...hotspot,
+                label: d.label,
+                groupId: key ? (groupIdByLabel.get(key) ?? null) : null,
+              }));
             });
           }}
           onApplyContent={(content) => {
