@@ -28,6 +28,9 @@ export interface HotspotContent {
 export interface Connector {
   to: Point;
   toShape: HotspotShape | null;
+  /** Straight line, or a gentle arc — always has a defined start (the
+   *  hotspot's anchor) and end (`to`), just a different path between them. */
+  curved: boolean;
 }
 
 export interface Hotspot {
@@ -79,6 +82,10 @@ export interface InteractionSettings {
   typewriterSpeedMs: number;
   panelWidthPx: number;
   focusFollowsHover: boolean;
+  /** The line from the selected block to the panel edge — some people find
+   *  it redundant once the panel is open, so it can be hidden entirely. */
+  showPanelConnector: boolean;
+  panelConnectorCurved: boolean;
 }
 
 export interface ProjectTheme {
@@ -134,6 +141,8 @@ export const DEFAULT_INTERACTION: InteractionSettings = {
   typewriterSpeedMs: 14,
   panelWidthPx: 440,
   focusFollowsHover: true,
+  showPanelConnector: true,
+  panelConnectorCurved: true,
 };
 
 export function emptyContent(): HotspotContent {

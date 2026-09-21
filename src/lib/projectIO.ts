@@ -77,6 +77,29 @@ function migrateV1ToV2(raw: Record<string, unknown>): Record<string, unknown> {
   };
 }
 
+/** Fills in interaction/connector fields added after a project was saved, so
+ *  older v2 files (already exported before those fields existed) keep
+ *  working instead of throwing on a missing key. Doesn't bump
+ *  schemaVersion — this is additive normalization, not a format change. */
+function normalizeConnector(raw: unknown): Record<string, unknown> {
+  const c = raw as Record<string, unknown>;
+  return { curved: false, ...c };
+}
+
+function normalizeProject(raw: Record<string, unknown>): Record<string, unknown> {
+  const theme = (raw.theme ?? {}) as Record<string, unknown>;
+  const interaction = { ...DEFAULT_INTERACTION, ...((theme.interaction as object) ?? {}) };
+  const groups = ((raw.groups as Record<string, unknown>[]) ?? []).map((g) => ({
+    ...g,
+    connector: g.connector ? normalizeConnector(g.connector) : null,
+  }));
+  const hotspots = ((raw.hotspots as Record<string, unknown>[]) ?? []).map((h) => {
+    if (!("connector" in h)) return h;
+    return { ...h, connector: h.connector ? normalizeConnector(h.connector) : null };
+  });
+  return { ...raw, theme: { ...theme, interaction }, groups, hotspots };
+}
+
 function validateProject(data: unknown): Project {
   if (!data || typeof data !== "object") throw new Error("Fichier projet invalide.");
   let p = data as Record<string, unknown>;
@@ -85,6 +108,7 @@ function validateProject(data: unknown): Project {
   } else if (p.schemaVersion !== 2) {
     throw new Error("Version de schéma non supportée.");
   }
+  p = normalizeProject(p);
   if (!p.image || !Array.isArray(p.hotspots) || !Array.isArray(p.groups) || !p.theme) {
     throw new Error("Structure de projet incomplète.");
   }

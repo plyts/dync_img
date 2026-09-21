@@ -166,7 +166,7 @@ export function Inspector({
             } else if (mode === "none") {
               onChange((h) => ({ ...h, connector: null }));
             } else {
-              onChange((h) => ({ ...h, connector: { to: { ...h.anchor }, toShape: null } }));
+              onChange((h) => ({ ...h, connector: { to: { ...h.anchor }, toShape: null, curved: false } }));
             }
           }}
         >
@@ -204,6 +204,21 @@ export function Inspector({
               Point d'arrivée en % (x, y). Optionnel : dessine aussi une zone qui s'éclaire à
               l'arrivée.
             </p>
+            <label
+              style={{ textTransform: "none", display: "flex", gap: 4, alignItems: "center", fontSize: 12, marginBottom: 6 }}
+            >
+              <input
+                type="checkbox"
+                checked={hotspot.connector.curved}
+                onChange={(e) =>
+                  onChange((h) => ({
+                    ...h,
+                    connector: h.connector ? { ...h.connector, curved: e.target.checked } : h.connector,
+                  }))
+                }
+              />
+              Ligne courbe (sinon droite)
+            </label>
             <button className="dy-btn" onClick={onStartConnectorShape} style={{ width: "100%" }}>
               {hotspot.connector.toShape ? "Redessiner la zone d'arrivée" : "+ Zone qui s'éclaire à l'arrivée"}
             </button>

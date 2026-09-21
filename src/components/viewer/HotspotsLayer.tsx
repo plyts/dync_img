@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import type { Connector, Hotspot, Project } from "../../types";
-import { effectiveSpotlight, pointsToSvgAttr, shapeToPolygonPoints } from "../../lib/geometry";
+import { connectorPathD, effectiveSpotlight, pointsToSvgAttr, shapeToPolygonPoints } from "../../lib/geometry";
 
 interface HotspotsLayerProps {
   project: Project;
@@ -93,11 +93,11 @@ export function HotspotsLayer({
           );
         })}
 
-        {selected && (
+        {selected && interaction.showPanelConnector && (
           <path
             pathLength={1}
             className={`dy-connector${connectorDrawn ? " drawn" : ""}`}
-            d={`M ${selected.anchor.x} ${selected.anchor.y} C ${(selected.anchor.x + targetX) / 2} ${selected.anchor.y}, ${(selected.anchor.x + targetX) / 2} ${selected.anchor.y}, ${targetX} ${selected.anchor.y}`}
+            d={connectorPathD(selected.anchor, { x: targetX, y: selected.anchor.y }, interaction.panelConnectorCurved)}
           />
         )}
 
@@ -105,6 +105,7 @@ export function HotspotsLayer({
           <GroupConnector
             from={selected.anchor}
             to={groupConnector.to}
+            curved={groupConnector.curved}
             color={selected.color}
             drawn={connectorDrawn}
           />
@@ -172,15 +173,17 @@ function PulseBadge({ point, color }: { point: { x: number; y: number }; color: 
 function GroupConnector({
   from,
   to,
+  curved,
   color,
   drawn,
 }: {
   from: { x: number; y: number };
   to: { x: number; y: number };
+  curved: boolean;
   color: string;
   drawn: boolean;
 }) {
-  const d = `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
+  const d = connectorPathD(from, to, curved);
   const style = { "--hs-color": color } as CSSProperties;
   return (
     <>

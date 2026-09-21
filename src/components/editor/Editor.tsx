@@ -175,7 +175,9 @@ export function Editor() {
               onSetConnectorShape={(id, shape) =>
                 store.updateHotspot(id, (h) => ({
                   ...h,
-                  connector: h.connector ? { ...h.connector, toShape: shape } : { to: h.anchor, toShape: shape },
+                  connector: h.connector
+                    ? { ...h.connector, toShape: shape }
+                    : { to: h.anchor, toShape: shape, curved: false },
                 }))
               }
               onPickAIRegion={(shape) => {

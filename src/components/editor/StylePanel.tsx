@@ -111,6 +111,27 @@ export function StylePanel({ theme, onChangeInteraction, onChangeTheme, onClose 
           </>
         )}
 
+        <Row label="Ligne vers le panneau">
+          <label style={{ textTransform: "none", display: "flex", gap: 6, alignItems: "center" }}>
+            <input
+              type="checkbox"
+              checked={s.showPanelConnector}
+              onChange={(e) => onChangeInteraction({ showPanelConnector: e.target.checked })}
+            />
+            Afficher (relie le bloc sélectionné au panneau)
+          </label>
+          {s.showPanelConnector && (
+            <label style={{ textTransform: "none", display: "flex", gap: 6, alignItems: "center", marginTop: 4 }}>
+              <input
+                type="checkbox"
+                checked={s.panelConnectorCurved}
+                onChange={(e) => onChangeInteraction({ panelConnectorCurved: e.target.checked })}
+              />
+              Courbe (sinon droite)
+            </label>
+          )}
+        </Row>
+
         <Row label={`Vitesse du point sur le connecteur (${s.connectorDotSpeedMs}ms)`}>
           <input type="range" min={400} max={4000} step={100} {...num("connectorDotSpeedMs")} />
         </Row>

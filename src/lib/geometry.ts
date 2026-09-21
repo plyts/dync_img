@@ -171,6 +171,24 @@ export function centroidOfAreas(areas: HotspotShape[]): Point {
   return { x: sum.x / pts.length, y: sum.y / pts.length };
 }
 
+/** A connector's path always has a defined start and end (`from`/`to`) — only
+ *  the shape between them changes: a straight line, or a gentle arc bowed
+ *  perpendicular to the line by a fraction of its length. */
+export function connectorPathD(from: Point, to: Point, curved: boolean): string {
+  if (!curved) return `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
+  const mx = (from.x + to.x) / 2;
+  const my = (from.y + to.y) / 2;
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const dist = Math.hypot(dx, dy) || 1;
+  const nx = -dy / dist;
+  const ny = dx / dist;
+  const bend = dist * 0.18;
+  const cx = mx + nx * bend;
+  const cy = my + ny * bend;
+  return `M ${from.x} ${from.y} Q ${cx} ${cy} ${to.x} ${to.y}`;
+}
+
 export function polygonSignedArea(points: Point[]): number {
   let area = 0;
   for (let i = 0; i < points.length; i++) {

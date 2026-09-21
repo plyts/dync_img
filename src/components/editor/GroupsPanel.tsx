@@ -54,7 +54,9 @@ export function GroupsPanel({ groups, palette, onAdd, onUpdate, onRemove }: Grou
                     type="checkbox"
                     checked={g.connector !== null}
                     onChange={(e) =>
-                      onUpdate(g.id, { connector: e.target.checked ? { to: { x: 50, y: 50 }, toShape: null } : null })
+                      onUpdate(g.id, {
+                        connector: e.target.checked ? { to: { x: 50, y: 50 }, toShape: null, curved: false } : null,
+                      })
                     }
                   />
                   Actif
@@ -84,6 +86,27 @@ export function GroupsPanel({ groups, palette, onAdd, onUpdate, onRemove }: Grou
                   </>
                 )}
               </div>
+              {g.connector && (
+                <label
+                  style={{
+                    textTransform: "none",
+                    display: "flex",
+                    gap: 4,
+                    alignItems: "center",
+                    marginTop: 4,
+                    fontSize: 12,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={g.connector.curved}
+                    onChange={(e) =>
+                      onUpdate(g.id, { connector: { ...g.connector!, curved: e.target.checked } })
+                    }
+                  />
+                  Ligne courbe (sinon droite)
+                </label>
+              )}
             </div>
           )}
         </div>
