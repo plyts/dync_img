@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useProject } from "../../state/store";
 import { Stage } from "../Stage";
 import { DrawLayer, type DrawMode, type Tool } from "./DrawLayer";
@@ -26,6 +26,21 @@ export function Editor() {
   const jsonInputRef = useRef<HTMLInputElement>(null);
 
   const selected = project.hotspots.find((h) => h.id === selectedId) ?? null;
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (!selectedId) return;
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable) return;
+      e.preventDefault();
+      store.removeHotspot(selectedId);
+      setSelectedId(null);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedId, store]);
 
   async function handleImageUpload(file: File) {
     const image = await readImageFile(file);
@@ -251,7 +266,14 @@ export function Editor() {
             groups={project.groups}
             palette={project.theme.palette}
             onAdd={(label) => store.addGroup(label)}
-            onUpdate={(id, patch) => store.updateGroup(id, (g) => ({ ...g, ...patch }))}
+            onUpdate={(id, patch) => {
+              store.updateGroup(id, (g) => ({ ...g, ...patch }));
+              if (patch.color) {
+                project.hotspots
+                  .filter((h) => h.groupId === id)
+                  .forEach((h) => store.updateHotspot(h.id, (hh) => ({ ...hh, color: patch.color! })));
+              }
+            }}
             onRemove={(id) => store.removeGroup(id)}
           />
         </div>

@@ -31,6 +31,13 @@ export interface Connector {
   /** Straight line, or a gentle arc — always has a defined start (the
    *  hotspot's anchor) and end (`to`), just a different path between them. */
   curved: boolean;
+  /** Every field below is optional: unset = inherit the project-wide
+   *  interaction settings (or the hotspot's own color for `color`). */
+  strokeWidth?: number;
+  dotRadius?: number;
+  dotSpeedMs?: number;
+  ringSpeedMs?: number;
+  color?: string;
 }
 
 export interface Hotspot {
@@ -57,6 +64,15 @@ export interface Hotspot {
   seeAlso: string[];
   /** Per-block visual overrides; `{}` = fully inherits the project style. */
   style: HotspotStyleOverride;
+  /**
+   * Raw CSS, scoped automatically to this block (every element belonging to
+   * it carries a `.hs-{id}` class). Use `&` for compound state selectors on
+   * the frame itself, e.g. `&.hovered { stroke-width: 2; }` or
+   * `&.selected { animation: spin 3s linear infinite; }`. This is the escape
+   * hatch for anything the structured fields above don't cover — literally
+   * any CSS property, any animation, on this one block.
+   */
+  customCss: string;
   content: HotspotContent;
 }
 
@@ -163,7 +179,7 @@ export const DEFAULT_INTERACTION: InteractionSettings = {
   typewriterSpeedMs: 14,
   panelWidthPx: 440,
   focusFollowsHover: true,
-  showPanelConnector: true,
+  showPanelConnector: false,
   panelConnectorCurved: true,
 };
 

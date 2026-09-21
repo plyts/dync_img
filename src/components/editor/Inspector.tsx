@@ -55,31 +55,40 @@ export function Inspector({
 
       <div className="dy-field">
         <label>Couleur</label>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-          {palette.map((c) => (
-            <button
-              key={c}
-              onClick={() => onChange((h) => ({ ...h, color: c }))}
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: "50%",
-                background: c,
-                border: c === hotspot.color ? "2px solid var(--dy-ink)" : "1px solid transparent",
-                cursor: "pointer",
-              }}
-              aria-label={c}
+        {hotspot.groupId ? (
+          <p style={{ fontSize: 12, margin: 0, display: "flex", alignItems: "center", gap: 6 }}>
+            <span
+              style={{ width: 14, height: 14, borderRadius: "50%", background: hotspot.color, display: "inline-block" }}
             />
-          ))}
-          <input
-            type="color"
-            value={hotspot.color}
-            onChange={(e) => {
-              const v = e.target.value;
-              onChange((h) => ({ ...h, color: v }));
-            }}
-          />
-        </div>
+            Héritée du groupe — retire-le du groupe pour choisir une couleur propre.
+          </p>
+        ) : (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+            {palette.map((c) => (
+              <button
+                key={c}
+                onClick={() => onChange((h) => ({ ...h, color: c }))}
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: "50%",
+                  background: c,
+                  border: c === hotspot.color ? "2px solid var(--dy-ink)" : "1px solid transparent",
+                  cursor: "pointer",
+                }}
+                aria-label={c}
+              />
+            ))}
+            <input
+              type="color"
+              value={hotspot.color}
+              onChange={(e) => {
+                const v = e.target.value;
+                onChange((h) => ({ ...h, color: v }));
+              }}
+            />
+          </div>
+        )}
       </div>
 
       <div className="dy-field">
@@ -88,7 +97,8 @@ export function Inspector({
           value={hotspot.groupId ?? ""}
           onChange={(e) => {
             const v = e.target.value || null;
-            onChange((h) => ({ ...h, groupId: v }));
+            const targetGroup = groups.find((g) => g.id === v);
+            onChange((h) => ({ ...h, groupId: v, color: targetGroup ? targetGroup.color : h.color }));
           }}
         >
           <option value="">— aucun —</option>
@@ -224,6 +234,108 @@ export function Inspector({
             <button className="dy-btn" onClick={onStartConnectorShape} style={{ width: "100%" }}>
               {hotspot.connector.toShape ? "Redessiner la zone d'arrivée" : "+ Zone qui s'éclaire à l'arrivée"}
             </button>
+
+            <details style={{ marginTop: 8 }}>
+              <summary style={{ fontSize: 12, cursor: "pointer" }}>Réglages fins du connecteur</summary>
+              <div style={{ marginTop: 6 }}>
+                <ConnectorNumberField
+                  label="Épaisseur du trait"
+                  value={hotspot.connector.strokeWidth}
+                  min={0.1}
+                  max={2}
+                  step={0.1}
+                  onChange={(v) =>
+                    onChange((h) => (h.connector ? { ...h, connector: { ...h.connector, strokeWidth: v } } : h))
+                  }
+                  onReset={() =>
+                    onChange((h) => {
+                      if (!h.connector) return h;
+                      const { strokeWidth: _s, ...rest } = h.connector;
+                      return { ...h, connector: rest as Hotspot["connector"] };
+                    })
+                  }
+                />
+                <ConnectorNumberField
+                  label="Rayon du point animé"
+                  value={hotspot.connector.dotRadius}
+                  min={0.2}
+                  max={2}
+                  step={0.1}
+                  onChange={(v) =>
+                    onChange((h) => (h.connector ? { ...h, connector: { ...h.connector, dotRadius: v } } : h))
+                  }
+                  onReset={() =>
+                    onChange((h) => {
+                      if (!h.connector) return h;
+                      const { dotRadius: _d, ...rest } = h.connector;
+                      return { ...h, connector: rest as Hotspot["connector"] };
+                    })
+                  }
+                />
+                <ConnectorNumberField
+                  label="Vitesse du point (ms)"
+                  value={hotspot.connector.dotSpeedMs}
+                  min={400}
+                  max={4000}
+                  step={100}
+                  onChange={(v) =>
+                    onChange((h) => (h.connector ? { ...h, connector: { ...h.connector, dotSpeedMs: v } } : h))
+                  }
+                  onReset={() =>
+                    onChange((h) => {
+                      if (!h.connector) return h;
+                      const { dotSpeedMs: _sp, ...rest } = h.connector;
+                      return { ...h, connector: rest as Hotspot["connector"] };
+                    })
+                  }
+                />
+                <ConnectorNumberField
+                  label="Vitesse de l'onde (ms)"
+                  value={hotspot.connector.ringSpeedMs}
+                  min={600}
+                  max={4000}
+                  step={100}
+                  onChange={(v) =>
+                    onChange((h) => (h.connector ? { ...h, connector: { ...h.connector, ringSpeedMs: v } } : h))
+                  }
+                  onReset={() =>
+                    onChange((h) => {
+                      if (!h.connector) return h;
+                      const { ringSpeedMs: _r, ...rest } = h.connector;
+                      return { ...h, connector: rest as Hotspot["connector"] };
+                    })
+                  }
+                />
+                <div className="dy-field">
+                  <label>Couleur{hotspot.connector.color === undefined ? " — celle du bloc" : ""}</label>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input
+                      type="color"
+                      value={hotspot.connector.color ?? hotspot.color}
+                      onChange={(e) =>
+                        onChange((h) =>
+                          h.connector ? { ...h, connector: { ...h.connector, color: e.target.value } } : h,
+                        )
+                      }
+                    />
+                    {hotspot.connector.color !== undefined && (
+                      <button
+                        className="dy-btn"
+                        onClick={() =>
+                          onChange((h) => {
+                            if (!h.connector) return h;
+                            const { color: _c, ...rest } = h.connector;
+                            return { ...h, connector: rest as Hotspot["connector"] };
+                          })
+                        }
+                      >
+                        ↺
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </details>
           </div>
         )}
       </div>
@@ -240,6 +352,26 @@ export function Inspector({
           })
         }
       />
+
+      <div className="dy-field">
+        <label>CSS avancé (bloc par bloc)</label>
+        <p style={{ fontSize: 11, color: "var(--dy-muted)", margin: "0 0 6px" }}>
+          Tout ce qui n'est pas couvert ci-dessus : n'importe quelle propriété CSS, sur ce bloc
+          uniquement. Utilise <code>&amp;</code> pour cibler ses propres états, ex.{" "}
+          <code>&amp;.hovered {"{"} stroke-width: 2; {"}"}</code> ou{" "}
+          <code>&amp;.selected {"{"} animation: spin 3s linear infinite; {"}"}</code>.
+        </p>
+        <textarea
+          rows={5}
+          value={hotspot.customCss}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange((h) => ({ ...h, customCss: v }));
+          }}
+          placeholder={"&.hovered {\n  stroke-width: 2;\n}"}
+          className="dy-code-textarea"
+        />
+      </div>
 
       <div className="dy-field">
         <label>Explorer aussi</label>
@@ -623,6 +755,50 @@ function StyleOverridePanel({
           />
         </>
       )}
+    </div>
+  );
+}
+
+function ConnectorNumberField({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  onReset,
+}: {
+  label: string;
+  value: number | undefined;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+  onReset: () => void;
+}) {
+  const fallback = (min + max) / 2;
+  const isOverridden = value !== undefined;
+  return (
+    <div className="dy-field">
+      <label>
+        {label} ({value ?? fallback}){isOverridden ? "" : " — global"}
+      </label>
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value ?? fallback}
+          style={{ flex: 1 }}
+          onChange={(e) => onChange(Number(e.target.value))}
+        />
+        {isOverridden && (
+          <button className="dy-btn" onClick={onReset} aria-label={`Réinitialiser ${label}`}>
+            ↺
+          </button>
+        )}
+      </div>
     </div>
   );
 }

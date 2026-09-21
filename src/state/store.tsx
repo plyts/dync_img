@@ -77,6 +77,7 @@ function buildHotspot(
     anchor: areas.length === 1 ? centroid(areas[0]) : centroidOfAreas(areas),
     seeAlso: [],
     style: {},
+    customCss: "",
     content: emptyContent(),
   };
 }

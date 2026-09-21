@@ -1,5 +1,6 @@
 import type { Hotspot, Project } from "../../types";
 import { useTypewriter } from "../../lib/useTypewriter";
+import { renderMarkdown } from "../../lib/markdown";
 
 interface DetailPanelProps {
   project: Project;
@@ -44,7 +45,9 @@ export function DetailPanel({
           </div>
           <div className="dy-panel-body">
             {group && <div className="dy-tools"><span>{group.label}</span></div>}
-            {hotspot.content.summary && <p className="dy-summary">{hotspot.content.summary}</p>}
+            {hotspot.content.summary && (
+              <p className="dy-summary" dangerouslySetInnerHTML={{ __html: renderMarkdown(hotspot.content.summary) }} />
+            )}
 
             {hotspot.content.steps.length > 0 && (
               <div>
@@ -57,7 +60,7 @@ export function DetailPanel({
                       style={{ animationDelay: `${(i * stepStaggerMs) / 1000}s`, paddingLeft: 8 }}
                     >
                       <h4>{step.title}</h4>
-                      <p>{step.body}</p>
+                      <p dangerouslySetInnerHTML={{ __html: renderMarkdown(step.body) }} />
                     </li>
                   ))}
                 </ol>
@@ -78,14 +81,20 @@ export function DetailPanel({
             {hotspot.content.whenToUse && (
               <div>
                 <h3 className="dy-block-title">Quand l'utiliser</h3>
-                <p className="dy-summary">{hotspot.content.whenToUse}</p>
+                <p
+                  className="dy-summary"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(hotspot.content.whenToUse) }}
+                />
               </div>
             )}
 
             {hotspot.content.caution && (
               <div>
                 <h3 className="dy-block-title">Point d'attention</h3>
-                <p className="dy-summary">{hotspot.content.caution}</p>
+                <p
+                  className="dy-summary"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(hotspot.content.caution) }}
+                />
               </div>
             )}
 
