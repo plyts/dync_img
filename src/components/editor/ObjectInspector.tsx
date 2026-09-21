@@ -1,17 +1,25 @@
-import type { CanvasObject } from "../../types";
+import type { CanvasObject, Hotspot } from "../../types";
 
 interface ObjectInspectorProps {
   object: CanvasObject;
+  hotspots: Hotspot[];
   onChange: (patch: Partial<CanvasObject>) => void;
   onDelete: () => void;
   onBringToFront: () => void;
   onSendToBack: () => void;
 }
 
-export function ObjectInspector({ object, onChange, onDelete, onBringToFront, onSendToBack }: ObjectInspectorProps) {
+const KIND_LABEL: Record<CanvasObject["kind"], string> = {
+  text: "Texte",
+  image: "Image / icône",
+  shape: "Forme",
+  line: "Ligne",
+};
+
+export function ObjectInspector({ object, hotspots, onChange, onDelete, onBringToFront, onSendToBack }: ObjectInspectorProps) {
   return (
     <div>
-      <h3>{object.kind === "text" ? "Texte" : object.kind === "image" ? "Image / icône" : "Forme"}</h3>
+      <h3>{KIND_LABEL[object.kind]}</h3>
 
       {object.kind === "text" && (
         <>
@@ -153,6 +161,108 @@ export function ObjectInspector({ object, onChange, onDelete, onBringToFront, on
               )}
             </div>
           </div>
+        </>
+      )}
+
+      {object.kind === "line" && (
+        <>
+          <div className="dy-field">
+            <label>Point de départ</label>
+            <select
+              value={object.fromHotspotId ?? ""}
+              onChange={(e) => onChange({ fromHotspotId: e.target.value || null })}
+            >
+              <option value="">Libre (glisser sur l'image)</option>
+              {hotspots.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.label || "Sans nom"}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="dy-field">
+            <label>Point d'arrivée</label>
+            <select
+              value={object.toHotspotId ?? ""}
+              onChange={(e) => onChange({ toHotspotId: e.target.value || null })}
+            >
+              <option value="">Libre (glisser sur l'image)</option>
+              {hotspots.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.label || "Sans nom"}
+                </option>
+              ))}
+            </select>
+          </div>
+          <label style={{ textTransform: "none", display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
+            <input type="checkbox" checked={object.curved} onChange={(e) => onChange({ curved: e.target.checked })} />
+            Ligne courbe (sinon droite)
+          </label>
+          <div className="dy-field">
+            <label>Couleur</label>
+            <input type="color" value={object.strokeColor} onChange={(e) => onChange({ strokeColor: e.target.value })} />
+          </div>
+          <div className="dy-field">
+            <label>Épaisseur ({object.strokeWidth.toFixed(1)})</label>
+            <input
+              type="range"
+              min={0.1}
+              max={2}
+              step={0.1}
+              value={object.strokeWidth}
+              onChange={(e) => onChange({ strokeWidth: Number(e.target.value) })}
+            />
+          </div>
+          <div className="dy-field">
+            <label>Pointillés</label>
+            <select
+              value={object.dashPattern === "1 0" ? "solid" : "dashed"}
+              onChange={(e) => onChange({ dashPattern: e.target.value === "solid" ? "1 0" : "2 1.4" })}
+            >
+              <option value="dashed">Pointillé</option>
+              <option value="solid">Continu</option>
+            </select>
+          </div>
+          <label style={{ textTransform: "none", display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
+            <input type="checkbox" checked={object.animated} onChange={(e) => onChange({ animated: e.target.checked })} />
+            Pointillés animés (défilement)
+          </label>
+          <label style={{ textTransform: "none", display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
+            <input type="checkbox" checked={object.dotEnabled} onChange={(e) => onChange({ dotEnabled: e.target.checked })} />
+            Point qui voyage du début à la fin
+          </label>
+          {object.dotEnabled && (
+            <>
+              <div className="dy-field">
+                <label>Couleur du point</label>
+                <input type="color" value={object.dotColor} onChange={(e) => onChange({ dotColor: e.target.value })} />
+              </div>
+              <div className="dy-field">
+                <label>Rayon du point ({object.dotRadius.toFixed(1)})</label>
+                <input
+                  type="range"
+                  min={0.3}
+                  max={2}
+                  step={0.1}
+                  value={object.dotRadius}
+                  onChange={(e) => onChange({ dotRadius: Number(e.target.value) })}
+                />
+              </div>
+            </>
+          )}
+          {(object.animated || object.dotEnabled) && (
+            <div className="dy-field">
+              <label>Vitesse ({object.speedMs} ms)</label>
+              <input
+                type="range"
+                min={400}
+                max={5000}
+                step={100}
+                value={object.speedMs}
+                onChange={(e) => onChange({ speedMs: Number(e.target.value) })}
+              />
+            </div>
+          )}
         </>
       )}
 

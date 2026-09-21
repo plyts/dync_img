@@ -213,6 +213,9 @@ export function Editor() {
             <button onClick={() => selectObject(store.addShapeObject("ellipse").id)} disabled={!project.image.src}>
               ◯ Forme
             </button>
+            <button onClick={() => selectObject(store.addLineObject().id)} disabled={!project.image.src}>
+              ／ Ligne
+            </button>
           </div>
           <input
             ref={objectImageInputRef}
@@ -275,6 +278,7 @@ export function Editor() {
             />
             <ObjectsLayer
               objects={project.objects}
+              hotspots={project.hotspots}
               selectedId={selectedObjectId}
               interactive={tool === "select" && drawMode === "new"}
               onSelect={selectObject}
@@ -297,6 +301,7 @@ export function Editor() {
           {selectedObject && (
             <ObjectInspector
               object={selectedObject}
+              hotspots={project.hotspots}
               onChange={(patch) =>
                 store.updateObject(selectedObject.id, (o) => ({ ...o, ...patch }) as CanvasObject)
               }

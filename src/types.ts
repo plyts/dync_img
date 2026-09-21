@@ -144,22 +144,26 @@ export interface ImageMeta {
 /**
  * Freeform objects placed directly on the image — independent of hotspots.
  * Purely decorative/annotative: they render in the viewer and export but
- * aren't clickable there. In the editor they're draggable, resizable (via
- * x/y/w/h, all in image-percent like everything else) and deletable.
+ * aren't clickable there. In the editor, the rect-shaped kinds (text, image,
+ * shape) are draggable/resizable via x/y/w/h like everything else; the line
+ * kind is dragged by its two endpoints instead.
  */
-export type CanvasObjectKind = "text" | "image" | "shape";
+export type CanvasObjectKind = "text" | "image" | "shape" | "line";
 
-interface CanvasObjectBase {
+interface CanvasObjectMeta {
   id: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
   order: number;
   hidden?: boolean;
 }
 
-export interface TextObject extends CanvasObjectBase {
+interface RectObjectBase extends CanvasObjectMeta {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface TextObject extends RectObjectBase {
   kind: "text";
   text: string;
   color: string;
@@ -171,14 +175,14 @@ export interface TextObject extends CanvasObjectBase {
   background: string | null;
 }
 
-export interface ImageObject extends CanvasObjectBase {
+export interface ImageObject extends RectObjectBase {
   kind: "image";
   src: string;
   alt: string;
   opacity: number;
 }
 
-export interface ShapeObject extends CanvasObjectBase {
+export interface ShapeObject extends RectObjectBase {
   kind: "shape";
   shapeType: "rect" | "ellipse";
   strokeColor: string;
@@ -187,7 +191,34 @@ export interface ShapeObject extends CanvasObjectBase {
   dashPattern: string;
 }
 
-export type CanvasObject = TextObject | ImageObject | ShapeObject;
+/**
+ * A freestanding line between any two points — each end either free (a
+ * plain point) or anchored to a hotspot, in which case it follows that
+ * block if it moves. Independent of the per-hotspot/group Connector system:
+ * this one isn't tied to any selection, always visible, and can join any
+ * two blocks (or a block and a free point, or two free points).
+ */
+export interface LineObject extends CanvasObjectMeta {
+  kind: "line";
+  from: Point;
+  to: Point;
+  fromHotspotId: string | null;
+  toHotspotId: string | null;
+  curved: boolean;
+  strokeColor: string;
+  strokeWidth: number;
+  dashPattern: string;
+  /** Marching-ants dash animation along the line. */
+  animated: boolean;
+  /** A dot traveling from `from` to `to` on a loop. */
+  dotEnabled: boolean;
+  dotColor: string;
+  dotRadius: number;
+  /** Shared duration for both the dash march and the dot travel. */
+  speedMs: number;
+}
+
+export type CanvasObject = TextObject | ImageObject | ShapeObject | LineObject;
 
 export interface Project {
   schemaVersion: 2;

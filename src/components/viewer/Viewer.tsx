@@ -79,7 +79,7 @@ export function Viewer({ syncSelectedId }: ViewerProps = {}) {
           </div>
         )}
         <Stage image={project.image}>
-          <CanvasObjectsView objects={project.objects} />
+          <CanvasObjectsView objects={project.objects} hotspots={project.hotspots} />
           <HotspotsLayer
             project={project}
             hoverId={hoverId}

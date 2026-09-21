@@ -6,7 +6,7 @@ import {
   useReducer,
   type ReactNode,
 } from "react";
-import type { CanvasObject, Group, Hotspot, HotspotShape, ImageMeta, ImageObject, Project, ShapeObject, TextObject } from "../types";
+import type { CanvasObject, Group, Hotspot, HotspotShape, ImageMeta, ImageObject, LineObject, Project, ShapeObject, TextObject } from "../types";
 import { DEFAULT_PALETTE, emptyContent } from "../types";
 import { centroid, centroidOfAreas } from "../lib/geometry";
 
@@ -141,6 +141,28 @@ function buildImageObject(project: Project, src: string, alt: string): ImageObje
   };
 }
 
+function buildLineObject(project: Project): LineObject {
+  const o = spawnOffset(project);
+  return {
+    id: crypto.randomUUID(),
+    kind: "line",
+    order: project.objects.length,
+    from: { x: 25 + o, y: 25 + o },
+    to: { x: 65 + o, y: 55 + o },
+    fromHotspotId: null,
+    toHotspotId: null,
+    curved: false,
+    strokeColor: "#2c2a27",
+    strokeWidth: 0.5,
+    dashPattern: "2 1.4",
+    animated: false,
+    dotEnabled: false,
+    dotColor: "#2c2a27",
+    dotRadius: 0.7,
+    speedMs: 1800,
+  };
+}
+
 export interface ProjectStore {
   project: Project;
   canUndo: boolean;
@@ -167,6 +189,7 @@ export interface ProjectStore {
   addTextObject: () => TextObject;
   addShapeObject: (shapeType: "rect" | "ellipse") => ShapeObject;
   addImageObject: (src: string, alt: string) => ImageObject;
+  addLineObject: () => LineObject;
   updateObject: (id: string, updater: (o: CanvasObject) => CanvasObject) => void;
   removeObject: (id: string) => void;
   bringObjectToFront: (id: string) => void;
@@ -297,6 +320,11 @@ export function ProjectProvider({
       },
       addImageObject: (src, alt) => {
         const created = buildImageObject(state.present, src, alt);
+        update((p) => ({ ...p, objects: [...p.objects, created] }));
+        return created;
+      },
+      addLineObject: () => {
+        const created = buildLineObject(state.present);
         update((p) => ({ ...p, objects: [...p.objects, created] }));
         return created;
       },

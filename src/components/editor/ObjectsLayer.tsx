@@ -1,10 +1,11 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import type { CanvasObject, Point } from "../../types";
-import { clientToPercent, resizeRect, type RectHandle } from "../../lib/geometry";
+import type { CanvasObject, Hotspot, ImageObject, LineObject, Point, ShapeObject, TextObject } from "../../types";
+import { clientToPercent, resizeRect, resolveLineEndpoint, type RectHandle } from "../../lib/geometry";
 import { CanvasObjectContent } from "../CanvasObjectContent";
 
 interface ObjectsLayerProps {
   objects: CanvasObject[];
+  hotspots: Hotspot[];
   selectedId: string | null;
   /** Object dragging/resizing is only offered while the hotspot tools are
    *  idle (select tool, no active draw mode) so it never fights hotspot
@@ -14,23 +15,38 @@ interface ObjectsLayerProps {
   onChange: (id: string, patch: Partial<CanvasObject>) => void;
 }
 
+type RectObject = TextObject | ImageObject | ShapeObject;
+
+function isRectObject(o: CanvasObject): o is RectObject {
+  return o.kind !== "line";
+}
+
 type DragSession =
   | { type: "move"; id: string; start: Point; startX: number; startY: number }
-  | { type: "resize"; id: string; handle: RectHandle; start: Point; startShape: { kind: "rect"; x: number; y: number; w: number; h: number } };
+  | { type: "resize"; id: string; handle: RectHandle; start: Point; startShape: { kind: "rect"; x: number; y: number; w: number; h: number } }
+  | { type: "line-endpoint"; id: string; which: "from" | "to"; start: Point; startPoint: Point };
 
 const HANDLES: RectHandle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 
-export function ObjectsLayer({ objects, selectedId, interactive, onSelect, onChange }: ObjectsLayerProps) {
+export function ObjectsLayer({ objects, hotspots, selectedId, interactive, onSelect, onChange }: ObjectsLayerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const dragRef = useRef<DragSession | null>(null);
-  const [draft, setDraft] = useState<{ id: string; x: number; y: number; w: number; h: number } | null>(null);
+  const [draftBox, setDraftBox] = useState<{ id: string; x: number; y: number; w: number; h: number } | null>(null);
+  const [draftLinePoint, setDraftLinePoint] = useState<{ id: string; which: "from" | "to"; point: Point } | null>(
+    null,
+  );
 
   function toPt(e: { clientX: number; clientY: number }): Point {
     return clientToPercent(svgRef.current!, e.clientX, e.clientY);
   }
 
-  function boxFor(o: CanvasObject) {
-    return draft && draft.id === o.id ? draft : o;
+  function boxFor(o: RectObject) {
+    return draftBox && draftBox.id === o.id ? draftBox : o;
+  }
+
+  function endpointFor(o: LineObject, which: "from" | "to"): Point {
+    if (draftLinePoint && draftLinePoint.id === o.id && draftLinePoint.which === which) return draftLinePoint.point;
+    return resolveLineEndpoint(o, which, hotspots);
   }
 
   function handleMove(e: ReactPointerEvent<SVGSVGElement>) {
@@ -40,24 +56,35 @@ export function ObjectsLayer({ objects, selectedId, interactive, onSelect, onCha
     const dx = pt.x - session.start.x;
     const dy = pt.y - session.start.y;
     if (session.type === "move") {
-      setDraft((d) => {
+      setDraftBox((d) => {
         const obj = objects.find((o) => o.id === session.id);
-        if (!obj) return d;
+        if (!obj || !isRectObject(obj)) return d;
         return { id: session.id, x: session.startX + dx, y: session.startY + dy, w: obj.w, h: obj.h };
       });
-    } else {
+    } else if (session.type === "resize") {
       const next = resizeRect(session.startShape, session.handle, dx, dy);
-      setDraft({ id: session.id, x: next.x, y: next.y, w: next.w, h: next.h });
+      setDraftBox({ id: session.id, x: next.x, y: next.y, w: next.w, h: next.h });
+    } else {
+      setDraftLinePoint({
+        id: session.id,
+        which: session.which,
+        point: { x: session.startPoint.x + dx, y: session.startPoint.y + dy },
+      });
     }
   }
 
   function handleUp() {
     const session = dragRef.current;
-    if (session && draft && draft.id === session.id) {
-      onChange(session.id, { x: draft.x, y: draft.y, w: draft.w, h: draft.h });
+    if (session) {
+      if (session.type === "line-endpoint" && draftLinePoint && draftLinePoint.id === session.id) {
+        onChange(session.id, session.which === "from" ? { from: draftLinePoint.point } : { to: draftLinePoint.point });
+      } else if (session.type !== "line-endpoint" && draftBox && draftBox.id === session.id) {
+        onChange(session.id, { x: draftBox.x, y: draftBox.y, w: draftBox.w, h: draftBox.h });
+      }
     }
     dragRef.current = null;
-    setDraft(null);
+    setDraftBox(null);
+    setDraftLinePoint(null);
   }
 
   return (
@@ -71,8 +98,53 @@ export function ObjectsLayer({ objects, selectedId, interactive, onSelect, onCha
       onPointerUp={interactive ? handleUp : undefined}
     >
       {objects.map((o) => {
-        const box = boxFor(o);
         const isSelected = interactive && o.id === selectedId;
+
+        if (o.kind === "line") {
+          const from = endpointFor(o, "from");
+          const to = endpointFor(o, "to");
+          return (
+            <g key={o.id} style={{ pointerEvents: interactive && !o.hidden ? "auto" : "none" }}>
+              <path
+                d={`M ${from.x} ${from.y} L ${to.x} ${to.y}`}
+                fill="none"
+                stroke={isSelected ? "var(--dy-ink)" : "transparent"}
+                strokeWidth={1.4}
+                style={{ cursor: interactive ? "pointer" : "default" }}
+                onPointerDown={(e) => {
+                  if (!interactive) return;
+                  e.stopPropagation();
+                  onSelect(o.id);
+                }}
+              />
+              <CanvasObjectContent obj={{ ...o, from, to }} hotspots={hotspots} />
+              {isSelected &&
+                (["from", "to"] as const).map((which) => {
+                  const anchored = which === "from" ? o.fromHotspotId : o.toHotspotId;
+                  const p = which === "from" ? from : to;
+                  return (
+                    <circle
+                      key={which}
+                      cx={p.x}
+                      cy={p.y}
+                      r={1.1}
+                      className="dy-handle"
+                      style={{ pointerEvents: anchored ? "none" : "auto", opacity: anchored ? 0.5 : 1 }}
+                      onPointerDown={(e) => {
+                        if (anchored) return;
+                        e.stopPropagation();
+                        const pt = toPt(e);
+                        dragRef.current = { type: "line-endpoint", id: o.id, which, start: pt, startPoint: p };
+                        (e.target as Element).setPointerCapture(e.pointerId);
+                      }}
+                    />
+                  );
+                })}
+            </g>
+          );
+        }
+
+        const box = boxFor(o);
         return (
           <g key={o.id} style={{ pointerEvents: interactive && !o.hidden ? "auto" : "none" }}>
             <rect
@@ -94,7 +166,7 @@ export function ObjectsLayer({ objects, selectedId, interactive, onSelect, onCha
                 (e.target as Element).setPointerCapture(e.pointerId);
               }}
             />
-            <CanvasObjectContent obj={{ ...o, ...box }} />
+            <CanvasObjectContent obj={{ ...o, ...box }} hotspots={hotspots} />
             {isSelected &&
               HANDLES.map((handle) => {
                 const positions: Record<RectHandle, Point> = {

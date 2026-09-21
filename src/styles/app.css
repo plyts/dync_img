@@ -297,6 +297,24 @@ body {
   transition: stroke-dashoffset 0.7s ease;
 }
 
+/* ---- Freestanding line canvas objects ---- */
+
+.dy-line-object {
+  fill: none;
+  stroke: var(--dy-line-color, var(--dy-ink));
+  stroke-width: var(--dy-line-width, 0.5);
+  stroke-dasharray: var(--dy-line-dash, 2 1.4);
+}
+
+.dy-line-object.animated {
+  animation: dy-marching var(--dy-line-speed, 1800ms) linear infinite;
+}
+
+.dy-line-dot {
+  fill: var(--dy-line-dot-color, var(--dy-ink));
+  pointer-events: none;
+}
+
 .dy-connector.drawn {
   stroke-dashoffset: 0;
 }
