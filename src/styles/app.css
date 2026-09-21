@@ -167,30 +167,101 @@ body {
   fill-opacity: 0;
   stroke-opacity: 0;
   stroke-width: 0.6;
-  cursor: pointer;
-  transition: fill-opacity 0.25s ease, stroke-opacity 0.25s ease, stroke-width 0.25s ease;
-  pointer-events: all;
+  pointer-events: none;
+  transition:
+    fill-opacity var(--dy-spotlight-ms, 250ms) ease,
+    stroke-opacity var(--dy-spotlight-ms, 250ms) ease,
+    stroke-width var(--dy-spotlight-ms, 250ms) ease;
 }
 
 .dy-hotspot.hovered {
-  fill-opacity: 0.18;
+  fill-opacity: var(--dy-hover-opacity, 0.18);
   stroke-opacity: 1;
-  stroke-dasharray: 2 1.4;
+  stroke-dasharray: var(--dy-dash, 2 1.4);
   animation: dy-marching 12s linear infinite;
 }
 
 .dy-hotspot.selected {
-  fill-opacity: 0.24;
+  fill-opacity: calc(var(--dy-hover-opacity, 0.18) + 0.06);
   stroke-opacity: 1;
-  stroke-width: 0.9;
-  stroke-dasharray: 2 1.4;
+  stroke-width: var(--dy-selection-stroke, 0.9);
+  stroke-dasharray: var(--dy-dash, 2 1.4);
   animation: dy-marching 12s linear infinite;
 }
 
 .dy-hotspot.dimmed {
   fill: var(--dy-ink);
-  fill-opacity: 0.45;
+  fill-opacity: var(--dy-dim-opacity, 0.45);
   stroke-opacity: 0;
+}
+
+.dy-hotspot-hit {
+  fill: transparent;
+  stroke: none;
+  cursor: pointer;
+  pointer-events: all;
+  outline: none;
+}
+
+.dy-pulse {
+  r: var(--dy-pulse-min, 0.7);
+  fill: none;
+  stroke: var(--hs-color);
+  stroke-width: 0.4;
+  opacity: 0.9;
+  pointer-events: none;
+  display: var(--dy-pulse-display, block);
+  animation: dy-pulse var(--dy-pulse-speed, 2200ms) ease-out infinite;
+}
+
+@keyframes dy-pulse {
+  0% {
+    r: var(--dy-pulse-min, 0.7);
+    opacity: 0.9;
+  }
+  100% {
+    r: var(--dy-pulse-max, 3);
+    opacity: 0;
+  }
+}
+
+.dy-ring {
+  fill: none;
+  stroke: var(--hs-color);
+  stroke-width: 0.4;
+  pointer-events: none;
+  animation: dy-ring var(--dy-ring-speed, 1700ms) ease-out infinite;
+}
+
+@keyframes dy-ring {
+  0% {
+    r: 0.8;
+    opacity: 0.9;
+  }
+  100% {
+    r: 3.4;
+    opacity: 0;
+  }
+}
+
+.dy-group-connector {
+  fill: none;
+  stroke: var(--hs-color);
+  stroke-width: 0.4;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  opacity: 0.8;
+  pointer-events: none;
+  transition: stroke-dashoffset 0.7s ease;
+}
+
+.dy-group-connector.drawn {
+  stroke-dashoffset: 0;
+}
+
+.dy-group-connector-dot {
+  fill: var(--hs-color);
+  pointer-events: none;
 }
 
 @keyframes dy-marching {
@@ -369,6 +440,20 @@ body {
   font-size: 12px;
 }
 
+.dy-see-also {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 2px dashed var(--dy-border);
+  border-radius: 999px;
+  padding: 3px 12px 3px 8px;
+  font-size: 12px;
+  font-family: var(--dy-font-mono);
+  background: var(--dy-bg);
+  color: var(--dy-ink);
+  cursor: pointer;
+}
+
 .dy-panel-footer {
   display: flex;
   gap: 8px;
@@ -456,6 +541,26 @@ body {
   stroke: var(--dy-ink);
   stroke-width: 0.5;
   cursor: pointer;
+}
+
+.dy-handle-spotlight {
+  fill: #fff275;
+  stroke: #8a7300;
+}
+
+.dy-draw-hint {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--dy-ink);
+  color: var(--dy-bg);
+  border-radius: 999px;
+  padding: 4px 14px;
+  font-size: 12px;
+  font-family: var(--dy-font-mono);
+  z-index: 6;
+  pointer-events: none;
 }
 
 .dy-sidebar {

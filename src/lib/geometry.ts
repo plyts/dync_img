@@ -1,4 +1,4 @@
-import type { HotspotShape, Point } from "../types";
+import type { HotspotShape, HotspotStyleOverride, InteractionSettings, Point } from "../types";
 
 /**
  * All coordinates in this module are percentages (0-100) of the image box.
@@ -136,6 +136,73 @@ export function resizeRect(
   }
 
   return { ...shape, x, y, w, h };
+}
+
+export function unionBoundingBox(shapes: HotspotShape[]) {
+  const boxes = shapes.map(boundingBox);
+  const x1 = Math.min(...boxes.map((b) => b.x1));
+  const y1 = Math.min(...boxes.map((b) => b.y1));
+  const x2 = Math.max(...boxes.map((b) => b.x2));
+  const y2 = Math.max(...boxes.map((b) => b.y2));
+  return { x1, y1, x2, y2, w: x2 - x1, h: y2 - y1 };
+}
+
+export function unionRectShape(shapes: HotspotShape[]): HotspotShape {
+  const box = unionBoundingBox(shapes);
+  return { kind: "rect", x: box.x1, y: box.y1, w: box.w, h: box.h };
+}
+
+export function pointInAnyShape(shapes: HotspotShape[], pt: Point): boolean {
+  return shapes.some((s) => pointInShape(s, pt));
+}
+
+/** What actually lights up: the explicit spotlight, or the union of all
+ *  clickable areas when none was set (the common single-area case). */
+export function effectiveSpotlight(
+  areas: HotspotShape[],
+  spotlightShape: HotspotShape | null,
+): HotspotShape {
+  return spotlightShape ?? unionRectShape(areas);
+}
+
+export function centroidOfAreas(areas: HotspotShape[]): Point {
+  const pts = areas.map(centroid);
+  const sum = pts.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+  return { x: sum.x / pts.length, y: sum.y / pts.length };
+}
+
+/** Resolves a block's effective visual style: each field is the block's own
+ *  override if set, otherwise the project-wide default. */
+export function effectiveHotspotStyle(interaction: InteractionSettings, override: HotspotStyleOverride) {
+  return {
+    showOutline: override.showOutline ?? true,
+    dashPattern: override.dashPattern ?? interaction.dashPattern,
+    hoverTintOpacity: override.hoverTintOpacity ?? interaction.hoverTintOpacity,
+    selectionStrokeWidth: override.selectionStrokeWidth ?? interaction.selectionStrokeWidth,
+    spotlightCornerRadius: override.spotlightCornerRadius ?? interaction.spotlightCornerRadius,
+    pulseEnabled: override.pulseEnabled ?? interaction.pulseEnabled,
+    pulseMinRadius: override.pulseMinRadius ?? interaction.pulseMinRadius,
+    pulseMaxRadius: override.pulseMaxRadius ?? interaction.pulseMaxRadius,
+    pulseSpeedMs: override.pulseSpeedMs ?? interaction.pulseSpeedMs,
+  };
+}
+
+/** A connector's path always has a defined start and end (`from`/`to`) — only
+ *  the shape between them changes: a straight line, or a gentle arc bowed
+ *  perpendicular to the line by a fraction of its length. */
+export function connectorPathD(from: Point, to: Point, curved: boolean): string {
+  if (!curved) return `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
+  const mx = (from.x + to.x) / 2;
+  const my = (from.y + to.y) / 2;
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const dist = Math.hypot(dx, dy) || 1;
+  const nx = -dy / dist;
+  const ny = dx / dist;
+  const bend = dist * 0.18;
+  const cx = mx + nx * bend;
+  const cy = my + ny * bend;
+  return `M ${from.x} ${from.y} Q ${cx} ${cy} ${to.x} ${to.y}`;
 }
 
 export function polygonSignedArea(points: Point[]): number {

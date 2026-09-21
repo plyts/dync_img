@@ -8,6 +8,7 @@ import {
   draftHotspotContent,
   HOTSPOT_DETECTION_SYSTEM_PROMPT,
   type DetectedHotspot,
+  type PercentRect,
 } from "../../lib/ai";
 
 const KEY_STORAGE = "dyimg.anthropic-api-key";
@@ -15,6 +16,8 @@ const KEY_STORAGE = "dyimg.anthropic-api-key";
 interface AIAssistModalProps {
   project: Project;
   selectedLabel: string | null;
+  initialRegion: PercentRect | null;
+  onClearRegion: () => void;
   onClose: () => void;
   onImportDetected: (hotspots: DetectedHotspot[]) => void;
   onApplyContent: (content: HotspotContent) => void;
@@ -23,13 +26,15 @@ interface AIAssistModalProps {
 export function AIAssistModal({
   project,
   selectedLabel,
+  initialRegion,
+  onClearRegion,
   onClose,
   onImportDetected,
   onApplyContent,
 }: AIAssistModalProps) {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(KEY_STORAGE) ?? "");
   const [remember, setRemember] = useState(Boolean(localStorage.getItem(KEY_STORAGE)));
-  const [tab, setTab] = useState<"detect" | "content">(selectedLabel ? "content" : "detect");
+  const [tab, setTab] = useState<"detect" | "content">(initialRegion || !selectedLabel ? "detect" : "content");
   const [extra, setExtra] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +54,7 @@ export function AIAssistModal({
       persistKey();
       const result = await detectHotspotsFromImage(apiKey, project.image.src, {
         extraInstructions: extra,
+        region: initialRegion ?? undefined,
       });
       setDetected(result);
     } catch (err) {
@@ -117,13 +123,36 @@ export function AIAssistModal({
 
         {tab === "detect" ? (
           <div>
+            {initialRegion ? (
+              <div className="dy-field">
+                <label>Zone à affiner</label>
+                <p style={{ fontSize: 12 }}>
+                  Analyse limitée à la région dessinée (x:{Math.round(initialRegion.x)}%,
+                  y:{Math.round(initialRegion.y)}%, {Math.round(initialRegion.w)}×
+                  {Math.round(initialRegion.h)}%).
+                </p>
+                <button className="dy-btn" onClick={onClearRegion}>
+                  Revenir à l'image entière
+                </button>
+              </div>
+            ) : (
+              <p style={{ fontSize: 12, color: "var(--dy-muted)" }}>
+                Analyse l'image entière. Pour redécouper plus finement une seule zone (plus
+                précis), ferme cette fenêtre et utilise « 🔍 Affiner une zone » dans la barre
+                d'outils.
+              </p>
+            )}
             <div className="dy-field">
-              <label>Précisions (optionnel)</label>
+              <label>Instructions (optionnel)</label>
               <textarea
                 rows={2}
                 value={extra}
                 onChange={(e) => setExtra(e.target.value)}
-                placeholder="ex : ignore la légende en bas de l'image"
+                placeholder={
+                  initialRegion
+                    ? "ex : découpe cette zone en 4 sous-blocs, un par technique listée"
+                    : "ex : ignore la légende en bas de l'image"
+                }
               />
             </div>
             <details style={{ marginBottom: 10, fontSize: 12 }}>
@@ -131,18 +160,22 @@ export function AIAssistModal({
               <pre className="dy-example">
                 {HOTSPOT_DETECTION_SYSTEM_PROMPT}
                 {"\n\n---\n\n"}
-                {buildHotspotDetectionUserPrompt(extra)}
+                {buildHotspotDetectionUserPrompt(extra, Boolean(initialRegion))}
               </pre>
             </details>
             <button className="dy-btn primary" onClick={runDetect} disabled={!apiKey || loading}>
-              {loading ? "Analyse en cours…" : "Analyser l'image"}
+              {loading ? "Analyse en cours…" : "Analyser"}
             </button>
             {detected && (
               <div style={{ marginTop: 12 }}>
                 <p>{detected.length} bloc(s) détecté(s) :</p>
                 <ul>
                   {detected.map((d, i) => (
-                    <li key={i}>{d.label}</li>
+                    <li key={i}>
+                      {d.label}
+                      {d.areas.length > 1 ? ` (${d.areas.length} zones)` : ""}
+                      {d.groupLabel ? ` — ${d.groupLabel}` : ""}
+                    </li>
                   ))}
                 </ul>
                 <button

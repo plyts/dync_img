@@ -8,7 +8,7 @@ import {
 } from "react";
 import type { Group, Hotspot, HotspotShape, ImageMeta, Project } from "../types";
 import { DEFAULT_PALETTE, emptyContent } from "../types";
-import { centroid } from "../lib/geometry";
+import { centroid, centroidOfAreas } from "../lib/geometry";
 
 interface HistoryState {
   past: Project[];
@@ -58,7 +58,12 @@ function nextColor(project: Project): string {
   return palette[project.hotspots.length % palette.length];
 }
 
-function makeHotspot(project: Project, shape: HotspotShape, indexOffset = 0): Hotspot {
+function buildHotspot(
+  project: Project,
+  areas: HotspotShape[],
+  indexOffset = 0,
+  spotlightShape: HotspotShape | null = null,
+): Hotspot {
   const palette = project.theme.palette.length ? project.theme.palette : DEFAULT_PALETTE;
   const index = project.hotspots.length + indexOffset;
   return {
@@ -67,8 +72,11 @@ function makeHotspot(project: Project, shape: HotspotShape, indexOffset = 0): Ho
     color: palette[index % palette.length],
     groupId: null,
     order: index,
-    shape,
-    anchor: centroid(shape),
+    areas,
+    spotlightShape,
+    anchor: areas.length === 1 ? centroid(areas[0]) : centroidOfAreas(areas),
+    seeAlso: [],
+    style: {},
     content: emptyContent(),
   };
 }
@@ -85,9 +93,14 @@ export interface ProjectStore {
   setImage: (image: ImageMeta) => void;
   addHotspot: (shape: HotspotShape) => Hotspot;
   addHotspots: (shapes: HotspotShape[]) => Hotspot[];
+  addHotspotsBatch: (
+    specs: Array<{ areas: HotspotShape[]; spotlightShape?: HotspotShape | null }>,
+  ) => Hotspot[];
   updateHotspot: (id: string, updater: (h: Hotspot) => Hotspot) => void;
   removeHotspot: (id: string) => void;
   reorderHotspot: (id: string, direction: -1 | 1) => void;
+  bringToFront: (id: string) => void;
+  sendToBack: (id: string) => void;
   addGroup: (label: string) => Group;
   updateGroup: (id: string, updater: (g: Group) => Group) => void;
   removeGroup: (id: string) => void;
@@ -129,12 +142,19 @@ export function ProjectProvider({
       // `update()` callback and read it back afterwards, since that callback
       // may run later, against a different state, or not run synchronously.
       addHotspot: (shape) => {
-        const created = makeHotspot(state.present, shape);
+        const created = buildHotspot(state.present, [shape]);
         update((p) => ({ ...p, hotspots: [...p.hotspots, created] }));
         return created;
       },
       addHotspots: (shapes) => {
-        const created = shapes.map((shape, i) => makeHotspot(state.present, shape, i));
+        const created = shapes.map((shape, i) => buildHotspot(state.present, [shape], i));
+        update((p) => ({ ...p, hotspots: [...p.hotspots, ...created] }));
+        return created;
+      },
+      addHotspotsBatch: (specs) => {
+        const created = specs.map((spec, i) =>
+          buildHotspot(state.present, spec.areas, i, spec.spotlightShape ?? null),
+        );
         update((p) => ({ ...p, hotspots: [...p.hotspots, ...created] }));
         return created;
       },
@@ -165,11 +185,24 @@ export function ProjectProvider({
           });
           return { ...p, hotspots };
         }),
+      bringToFront: (id) =>
+        update((p) => {
+          const item = p.hotspots.find((h) => h.id === id);
+          if (!item) return p;
+          return { ...p, hotspots: [...p.hotspots.filter((h) => h.id !== id), item] };
+        }),
+      sendToBack: (id) =>
+        update((p) => {
+          const item = p.hotspots.find((h) => h.id === id);
+          if (!item) return p;
+          return { ...p, hotspots: [item, ...p.hotspots.filter((h) => h.id !== id)] };
+        }),
       addGroup: (label) => {
         const group: Group = {
           id: crypto.randomUUID(),
           label,
           color: nextColor(state.present),
+          connector: null,
         };
         update((p) => ({ ...p, groups: [...p.groups, group] }));
         return group;

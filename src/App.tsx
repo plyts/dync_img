@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ProjectProvider, useProject } from "./state/store";
 import { buildSampleProject } from "./lib/sampleProject";
 import { useGoogleFonts } from "./lib/useGoogleFonts";
+import { interactionCssVars } from "./lib/interactionVars";
 import { Viewer } from "./components/viewer/Viewer";
 import { Editor } from "./components/editor/Editor";
 
@@ -13,7 +14,7 @@ function AppShell() {
   useGoogleFonts(project.theme.fontDisplay, project.theme.fontMono);
 
   return (
-    <div className="dy-app">
+    <div className="dy-app" style={interactionCssVars(project.theme.interaction)}>
       <div className="dy-topbar">
         <input
           value={project.name}
