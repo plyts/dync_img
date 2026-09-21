@@ -225,13 +225,19 @@ JSON du projet, aucune modification de code.
 
 ## 9. Assistant IA (optionnel) — `lib/ai.ts`
 
-Fonctionnalité facultative : avec ta propre clé API Anthropic, l'outil peut
+Fonctionnalité facultative : avec ta propre clé API, l'outil peut
 (a) repérer automatiquement les blocs d'une image — avec zones multiples et
 spotlight quand pertinent — (b) rédiger la fiche "de A à Z" d'un bloc, et
 (c) réanalyser une seule région recadrée avec des instructions libres (bouton
-**🔍 Affiner une zone**). La clé n'est envoyée qu'à `api.anthropic.com`,
-jamais stockée ailleurs qu'en mémoire du navigateur (avec option explicite de
-sauvegarde en `localStorage`). Tous les prompts système sont exportés en
+**🔍 Affiner une zone**). Plusieurs fournisseurs sont proposés dans la
+fenêtre de l'assistant (menu « Fournisseur ») : Anthropic (Claude), OpenAI
+(GPT-4o), Qwen (Alibaba, quota gratuit à l'inscription), ou « Autre
+(compatible OpenAI) » pour n'importe quel service exposant une API de type
+chat-completions (Groq, OpenRouter, Together AI, un serveur local…), en
+renseignant son URL et son modèle. La clé n'est envoyée qu'au fournisseur
+choisi, jamais stockée ailleurs qu'en mémoire du navigateur (avec option
+explicite de sauvegarde en `localStorage`, une clé distincte par
+fournisseur). Tous les prompts système sont exportés en
 constantes dans le code (donc visibles, éditables, et affichés dans la modale
 via "Voir le prompt envoyé à l'IA") :
 

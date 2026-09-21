@@ -1,22 +1,74 @@
 import type { HotspotContent } from "../types";
 
 /**
- * Optional AI-assist feature: calls the Anthropic Messages API directly from
- * the browser with the user's own API key (never stored anywhere but this
- * tab's memory) to (1) detect candidate hotspots on ANY uploaded image, with
- * support for multi-area/spotlight blocks and for re-analyzing just one
- * region with free-form instructions, and (2) draft the A-to-Z content for a
- * given block. Every prompt is exported as a plain string/function so it is
- * visible, editable, and reproduced verbatim in docs/GUIDE.md.
+ * Optional AI-assist feature: calls a vision-capable LLM directly from the
+ * browser with the user's own API key (never stored anywhere but this
+ * device's localStorage, per provider) to (1) detect candidate hotspots on
+ * ANY uploaded image, with support for multi-area/spotlight blocks and for
+ * re-analyzing just one region with free-form instructions, and (2) draft
+ * the A-to-Z content for a given block. Every prompt is exported as a plain
+ * string/function so it is visible, editable, and reproduced verbatim in
+ * docs/GUIDE.md.
  *
- * A direct browser call needs the "anthropic-dangerous-direct-browser-access"
- * header. If your key's CORS/organization policy blocks that, proxy this
- * same request through a one-line serverless function instead — the prompt
- * and payload below stay identical either way.
+ * Several providers are supported (see AI_PROVIDERS) so you can use
+ * whichever key you already have, including free-tier options — Anthropic
+ * and OpenAI use their native APIs; everything else (Qwen included) goes
+ * through the OpenAI-compatible chat-completions shape most providers
+ * implement, so adding another one is just a new entry in AI_PROVIDERS, no
+ * new request logic. A direct browser call to Anthropic needs the
+ * "anthropic-dangerous-direct-browser-access" header; if your key's CORS/
+ * organization policy blocks that, proxy the request through a one-line
+ * serverless function instead — the prompt and payload stay identical.
  */
 
 export const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 export const DEFAULT_AI_MODEL = "claude-sonnet-4-5";
+
+export type AIProviderId = "anthropic" | "openai" | "qwen" | "custom-openai";
+
+export interface AIProviderConfig {
+  id: AIProviderId;
+  label: string;
+  /** Chat-completions endpoint for OpenAI-compatible providers; ignored for
+   *  "anthropic", which always uses ANTHROPIC_API_URL. Editable per-session
+   *  for "custom-openai" so any OpenAI-compatible host works (Groq,
+   *  OpenRouter, Together AI, a local server, …). */
+  baseUrl: string;
+  defaultModel: string;
+  /** Where to get a key — shown next to the key field, not sent anywhere. */
+  docsHint: string;
+}
+
+export const AI_PROVIDERS: Record<AIProviderId, AIProviderConfig> = {
+  anthropic: {
+    id: "anthropic",
+    label: "Anthropic (Claude)",
+    baseUrl: ANTHROPIC_API_URL,
+    defaultModel: DEFAULT_AI_MODEL,
+    docsHint: "Clé sur console.anthropic.com",
+  },
+  openai: {
+    id: "openai",
+    label: "OpenAI (GPT-4o)",
+    baseUrl: "https://api.openai.com/v1/chat/completions",
+    defaultModel: "gpt-4o-mini",
+    docsHint: "Clé sur platform.openai.com",
+  },
+  qwen: {
+    id: "qwen",
+    label: "Qwen (Alibaba — quota gratuit)",
+    baseUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
+    defaultModel: "qwen-vl-max",
+    docsHint: "Clé gratuite (quota d'essai) sur dashscope.console.aliyun.com",
+  },
+  "custom-openai": {
+    id: "custom-openai",
+    label: "Autre (compatible OpenAI)",
+    baseUrl: "https://api.groq.com/openai/v1/chat/completions",
+    defaultModel: "llama-3.2-90b-vision-preview",
+    docsHint: "Groq, OpenRouter, Together AI, un serveur local… — renseigne l'URL et le modèle ci-dessous. Plusieurs ont un niveau gratuit.",
+  },
+};
 
 export const HOTSPOT_DETECTION_SYSTEM_PROMPT = `Tu es un assistant qui prépare des schémas interactifs.
 On te donne l'image d'une architecture, d'un diagramme ou d'un schéma technique
@@ -88,6 +140,10 @@ interface AnthropicMessageResponse {
   content: Array<{ type: string; text?: string }>;
 }
 
+interface OpenAIChatResponse {
+  choices: Array<{ message?: { content?: string } }>;
+}
+
 async function callAnthropic(
   apiKey: string,
   system: string,
@@ -119,6 +175,75 @@ async function callAnthropic(
   const text = data.content.find((c) => c.type === "text")?.text;
   if (!text) throw new Error("Réponse vide de l'API.");
   return text;
+}
+
+/** Every provider besides Anthropic speaks the same OpenAI-compatible
+ *  chat-completions shape — Bearer auth, messages[], an image_url content
+ *  part that takes a data URL directly (no base64 pre-extraction needed). */
+async function callOpenAICompatible(
+  baseUrl: string,
+  apiKey: string,
+  system: string,
+  userText: string,
+  imageDataUrl: string | undefined,
+  model: string,
+): Promise<string> {
+  const userContent = imageDataUrl
+    ? [
+        { type: "text", text: userText },
+        { type: "image_url", image_url: { url: imageDataUrl } },
+      ]
+    : userText;
+
+  const res = await fetch(baseUrl, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 2048,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: userContent },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Appel API échoué (${res.status}) : ${body.slice(0, 300)}`);
+  }
+
+  const data = (await res.json()) as OpenAIChatResponse;
+  const text = data.choices?.[0]?.message?.content;
+  if (!text) throw new Error("Réponse vide de l'API.");
+  return text;
+}
+
+/** Single entry point used by both detection and content drafting — routes
+ *  to the right request shape for the chosen provider. `imageDataUrl` is
+ *  omitted for the text-only content-drafting call. */
+async function callProvider(
+  provider: AIProviderConfig,
+  apiKey: string,
+  system: string,
+  userText: string,
+  imageDataUrl: string | undefined,
+  model: string,
+  baseUrlOverride?: string,
+): Promise<string> {
+  if (provider.id === "anthropic") {
+    const userContent: Array<Record<string, unknown>> = [];
+    if (imageDataUrl) {
+      const { mediaType, data } = dataUrlToBase64(imageDataUrl);
+      userContent.push({ type: "image", source: { type: "base64", media_type: mediaType, data } });
+    }
+    userContent.push({ type: "text", text: userText });
+    return callAnthropic(apiKey, system, userContent, model);
+  }
+  return callOpenAICompatible(baseUrlOverride || provider.baseUrl, apiKey, system, userText, imageDataUrl, model);
 }
 
 function extractJson(text: string): unknown {
@@ -186,20 +311,20 @@ function remapRect(r: PercentRect, offset: { x: number; y: number }, scale: { x:
 }
 
 export async function detectHotspotsFromImage(
+  provider: AIProviderConfig,
   apiKey: string,
   imageDataUrl: string,
-  opts: { extraInstructions?: string; model?: string; region?: PercentRect } = {},
+  opts: { extraInstructions?: string; model?: string; region?: PercentRect; baseUrlOverride?: string } = {},
 ): Promise<DetectedHotspot[]> {
   const targetDataUrl = opts.region ? await cropImageDataUrl(imageDataUrl, opts.region) : imageDataUrl;
-  const { mediaType, data } = dataUrlToBase64(targetDataUrl);
-  const text = await callAnthropic(
+  const text = await callProvider(
+    provider,
     apiKey,
     HOTSPOT_DETECTION_SYSTEM_PROMPT,
-    [
-      { type: "image", source: { type: "base64", media_type: mediaType, data } },
-      { type: "text", text: buildHotspotDetectionUserPrompt(opts.extraInstructions, Boolean(opts.region)) },
-    ],
-    opts.model ?? DEFAULT_AI_MODEL,
+    buildHotspotDetectionUserPrompt(opts.extraInstructions, Boolean(opts.region)),
+    targetDataUrl,
+    opts.model ?? provider.defaultModel,
+    opts.baseUrlOverride,
   );
   const parsed = extractJson(text) as { hotspots?: DetectedHotspot[] };
   if (!Array.isArray(parsed.hotspots)) throw new Error("Format de réponse inattendu.");
@@ -216,16 +341,21 @@ export async function detectHotspotsFromImage(
 }
 
 export async function draftHotspotContent(
+  provider: AIProviderConfig,
   apiKey: string,
   label: string,
   schemaContext: string,
-  model = DEFAULT_AI_MODEL,
+  model?: string,
+  baseUrlOverride?: string,
 ): Promise<HotspotContent> {
-  const text = await callAnthropic(
+  const text = await callProvider(
+    provider,
     apiKey,
     CONTENT_DRAFT_SYSTEM_PROMPT,
-    [{ type: "text", text: buildContentDraftUserPrompt(label, schemaContext) }],
-    model,
+    buildContentDraftUserPrompt(label, schemaContext),
+    undefined,
+    model ?? provider.defaultModel,
+    baseUrlOverride,
   );
   const parsed = extractJson(text) as {
     summary?: string;
