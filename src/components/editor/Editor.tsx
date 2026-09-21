@@ -215,6 +215,7 @@ export function Editor() {
               allHotspots={project.hotspots}
               groups={project.groups}
               palette={project.theme.palette}
+              interaction={project.theme.interaction}
               onChange={(updater) => store.updateHotspot(selected.id, updater)}
               onDelete={() => {
                 store.removeHotspot(selected.id);

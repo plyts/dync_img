@@ -484,12 +484,30 @@ techniques aux nœuds du pipeline qu'elle utilise).
 la sélection en dur dans le CSS : opacité de la teinte au survol/sélection,
 motif des pointillés, épaisseur du contour, opacité du voile, pastilles
 pulsantes (on/off, taille, vitesse), vitesse et arrondi du "trou de lumière",
-vitesse du point/des ondes sur les connecteurs, rythme des étapes "de A à Z",
-vitesse de frappe de l'exemple, largeur et sens (gauche/droite) du panneau,
-et si le focus clavier (Tab) déclenche les mêmes effets que le survol. Tout
-est stocké dans `project.theme.interaction` (voir `types.ts`) et appliqué en
+ligne vers le panneau (afficher/masquer, courbe/droite), vitesse du
+point/des ondes sur les connecteurs, rythme des étapes "de A à Z", vitesse de
+frappe de l'exemple, largeur et sens (gauche/droite) du panneau, et si le
+focus clavier (Tab) déclenche les mêmes effets que le survol. Tout est
+stocké dans `project.theme.interaction` (voir `types.ts`) et appliqué en
 variables CSS (`lib/interactionVars.ts`) — aussi bien dans l'app que dans le
-fichier HTML exporté, qui reste donc fidèle à tes réglages.
+fichier HTML exporté, qui reste donc fidèle à tes réglages. Ce panneau règle
+le **projet entier**.
+
+**Style par bloc (dans l'Inspecteur).** Chaque bloc — famille, sous-bloc,
+élément du pipeline — peut **surcharger individuellement** n'importe lequel
+de ces réglages visuels : motif des pointillés, épaisseur du contour au
+survol/sélection, teinte de survol, arrondi du spotlight, pastille pulsante
+(on/off + taille + vitesse), ou carrément **désactiver le contour** sur ce
+bloc précis ("Afficher le contour" décoché = aucune bordure en pointillés,
+dans aucun état). Chaque champ non touché continue d'hériter du panneau
+Style global ; un bouton **↺** apparaît à côté de chaque champ modifié pour
+revenir à la valeur globale en un clic. C'est `Hotspot.style` dans le
+modèle de données (`HotspotStyleOverride`, tous les champs optionnels) —
+résolu via `effectiveHotspotStyle()` dans `lib/geometry.ts`, appliqué comme
+variables CSS *sur l'élément lui-même* (donc prioritaire sur les variables
+globales), avec le même mécanisme reproduit dans l'export HTML autonome.
+Les connecteurs (par bloc ou par groupe) ont eux aussi leur propre style
+(courbe/droite) réglable indépendamment — voir plus haut.
 
 **Affiner le découpage par IA.** Le bouton **🔍 Affiner une zone (IA)** de la
 barre d'outils laisse dessiner un rectangle autour d'une seule zone du

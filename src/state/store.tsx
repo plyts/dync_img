@@ -76,6 +76,7 @@ function buildHotspot(
     spotlightShape,
     anchor: areas.length === 1 ? centroid(areas[0]) : centroidOfAreas(areas),
     seeAlso: [],
+    style: {},
     content: emptyContent(),
   };
 }

@@ -1,6 +1,12 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import type { Connector, Hotspot, Project } from "../../types";
-import { connectorPathD, effectiveSpotlight, pointsToSvgAttr, shapeToPolygonPoints } from "../../lib/geometry";
+import {
+  connectorPathD,
+  effectiveHotspotStyle,
+  effectiveSpotlight,
+  pointsToSvgAttr,
+  shapeToPolygonPoints,
+} from "../../lib/geometry";
 
 interface HotspotsLayerProps {
   project: Project;
@@ -48,13 +54,14 @@ export function HotspotsLayer({
           const state: "idle" | "hovered" | "selected" | "dimmed" =
             h.id === selectedId ? "selected" : selected ? "dimmed" : h.id === hoverId ? "hovered" : "idle";
           const spotlight = effectiveSpotlight(h.areas, h.spotlightShape);
+          const es = effectiveHotspotStyle(interaction, h.style);
           return (
             <SpotlightShape
               key={`spot-${h.id}`}
               shape={spotlight}
               color={h.color}
               state={state}
-              cornerRadius={interaction.spotlightCornerRadius}
+              style={es}
             />
           );
         })}
@@ -64,12 +71,13 @@ export function HotspotsLayer({
             shape={groupConnector.toShape}
             color={selected.color}
             state="selected"
-            cornerRadius={interaction.spotlightCornerRadius}
+            style={effectiveHotspotStyle(interaction, selected.style)}
           />
         )}
 
         {project.hotspots.map((h) => {
-          const showPulse = interaction.pulseEnabled && !selectedId && h.id !== hoverId;
+          const es = effectiveHotspotStyle(interaction, h.style);
+          const showPulse = es.pulseEnabled && !selectedId && h.id !== hoverId;
           return (
             <g key={`hit-${h.id}`}>
               {h.areas.map((area, index) => (
@@ -88,7 +96,15 @@ export function HotspotsLayer({
                   }}
                 />
               ))}
-              {showPulse && <PulseBadge point={h.anchor} color={h.color} />}
+              {showPulse && (
+                <PulseBadge
+                  point={h.anchor}
+                  color={h.color}
+                  minRadius={es.pulseMinRadius}
+                  maxRadius={es.pulseMaxRadius}
+                  speedMs={es.pulseSpeedMs}
+                />
+              )}
             </g>
           );
         })}
@@ -133,14 +149,20 @@ function SpotlightShape({
   shape,
   color,
   state,
-  cornerRadius,
+  style: es,
 }: {
   shape: ReturnType<typeof effectiveSpotlight>;
   color: string;
   state: "idle" | "hovered" | "selected" | "dimmed";
-  cornerRadius: number;
+  style: ReturnType<typeof effectiveHotspotStyle>;
 }) {
-  const style = { "--hs-color": color } as CSSProperties;
+  const style = {
+    "--hs-color": color,
+    "--dy-hover-opacity": es.hoverTintOpacity,
+    "--dy-dash": es.dashPattern,
+    "--dy-selection-stroke": es.selectionStrokeWidth,
+    ...(es.showOutline ? null : { strokeOpacity: 0 }),
+  } as CSSProperties;
   const cls = `dy-hotspot${state !== "idle" ? ` ${state}` : ""}`;
   if (shape.kind === "rect") {
     return (
@@ -149,8 +171,8 @@ function SpotlightShape({
         y={shape.y}
         width={shape.w}
         height={shape.h}
-        rx={cornerRadius}
-        ry={cornerRadius}
+        rx={es.spotlightCornerRadius}
+        ry={es.spotlightCornerRadius}
         className={cls}
         style={style}
       />
@@ -159,13 +181,32 @@ function SpotlightShape({
   return <polygon points={pointsToSvgAttr(shapeToPolygonPoints(shape))} className={cls} style={style} />;
 }
 
-function PulseBadge({ point, color }: { point: { x: number; y: number }; color: string }) {
+function PulseBadge({
+  point,
+  color,
+  minRadius,
+  maxRadius,
+  speedMs,
+}: {
+  point: { x: number; y: number };
+  color: string;
+  minRadius: number;
+  maxRadius: number;
+  speedMs: number;
+}) {
   return (
     <circle
       cx={point.x}
       cy={point.y}
       className="dy-pulse"
-      style={{ "--hs-color": color } as CSSProperties}
+      style={
+        {
+          "--hs-color": color,
+          "--dy-pulse-min": minRadius,
+          "--dy-pulse-max": maxRadius,
+          "--dy-pulse-speed": `${speedMs}ms`,
+        } as CSSProperties
+      }
     />
   );
 }

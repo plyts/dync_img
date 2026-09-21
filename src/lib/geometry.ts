@@ -1,4 +1,4 @@
-import type { HotspotShape, Point } from "../types";
+import type { HotspotShape, HotspotStyleOverride, InteractionSettings, Point } from "../types";
 
 /**
  * All coordinates in this module are percentages (0-100) of the image box.
@@ -169,6 +169,22 @@ export function centroidOfAreas(areas: HotspotShape[]): Point {
   const pts = areas.map(centroid);
   const sum = pts.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
   return { x: sum.x / pts.length, y: sum.y / pts.length };
+}
+
+/** Resolves a block's effective visual style: each field is the block's own
+ *  override if set, otherwise the project-wide default. */
+export function effectiveHotspotStyle(interaction: InteractionSettings, override: HotspotStyleOverride) {
+  return {
+    showOutline: override.showOutline ?? true,
+    dashPattern: override.dashPattern ?? interaction.dashPattern,
+    hoverTintOpacity: override.hoverTintOpacity ?? interaction.hoverTintOpacity,
+    selectionStrokeWidth: override.selectionStrokeWidth ?? interaction.selectionStrokeWidth,
+    spotlightCornerRadius: override.spotlightCornerRadius ?? interaction.spotlightCornerRadius,
+    pulseEnabled: override.pulseEnabled ?? interaction.pulseEnabled,
+    pulseMinRadius: override.pulseMinRadius ?? interaction.pulseMinRadius,
+    pulseMaxRadius: override.pulseMaxRadius ?? interaction.pulseMaxRadius,
+    pulseSpeedMs: override.pulseSpeedMs ?? interaction.pulseSpeedMs,
+  };
 }
 
 /** A connector's path always has a defined start and end (`from`/`to`) — only

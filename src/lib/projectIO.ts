@@ -94,8 +94,9 @@ function normalizeProject(raw: Record<string, unknown>): Record<string, unknown>
     connector: g.connector ? normalizeConnector(g.connector) : null,
   }));
   const hotspots = ((raw.hotspots as Record<string, unknown>[]) ?? []).map((h) => {
-    if (!("connector" in h)) return h;
-    return { ...h, connector: h.connector ? normalizeConnector(h.connector) : null };
+    const withStyle = { ...h, style: (h.style as object) ?? {} };
+    if (!("connector" in h)) return withStyle;
+    return { ...withStyle, connector: h.connector ? normalizeConnector(h.connector) : null };
   });
   return { ...raw, theme: { ...theme, interaction }, groups, hotspots };
 }

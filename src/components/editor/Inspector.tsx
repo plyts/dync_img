@@ -1,11 +1,12 @@
 import { useState } from "react";
-import type { Group, Hotspot, StepContent } from "../../types";
+import type { Group, Hotspot, HotspotStyleOverride, InteractionSettings, StepContent } from "../../types";
 
 interface InspectorProps {
   hotspot: Hotspot;
   allHotspots: Hotspot[];
   groups: Group[];
   palette: string[];
+  interaction: InteractionSettings;
   onChange: (updater: (h: Hotspot) => Hotspot) => void;
   onDelete: () => void;
   onRemoveArea: (index: number) => void;
@@ -22,6 +23,7 @@ export function Inspector({
   allHotspots,
   groups,
   palette,
+  interaction,
   onChange,
   onDelete,
   onRemoveArea,
@@ -226,6 +228,19 @@ export function Inspector({
         )}
       </div>
 
+      <StyleOverridePanel
+        style={hotspot.style}
+        interaction={interaction}
+        onChange={(patch) => onChange((h) => ({ ...h, style: { ...h.style, ...patch } }))}
+        onReset={(key) =>
+          onChange((h) => {
+            const next = { ...h.style };
+            delete next[key];
+            return { ...h, style: next };
+          })
+        }
+      />
+
       <div className="dy-field">
         <label>Explorer aussi</label>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -420,6 +435,194 @@ function TagInput({ tags, onChange }: { tags: string[]; onChange: (tags: string[
         }}
         onBlur={commit}
       />
+    </div>
+  );
+}
+
+function OverrideRange({
+  label,
+  override,
+  global,
+  min,
+  max,
+  step,
+  onChange,
+  onReset,
+  format,
+}: {
+  label: string;
+  override: number | undefined;
+  global: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+  onReset: () => void;
+  format?: (v: number) => string;
+}) {
+  const value = override ?? global;
+  const isOverridden = override !== undefined;
+  const fmt = format ?? ((v: number) => String(v));
+  return (
+    <div className="dy-field">
+      <label>
+        {label} ({fmt(value)}){isOverridden ? "" : " — global"}
+      </label>
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          style={{ flex: 1 }}
+          onChange={(e) => onChange(Number(e.target.value))}
+        />
+        {isOverridden && (
+          <button className="dy-btn" onClick={onReset} aria-label={`Réinitialiser ${label}`}>
+            ↺
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StyleOverridePanel({
+  style,
+  interaction,
+  onChange,
+  onReset,
+}: {
+  style: HotspotStyleOverride;
+  interaction: InteractionSettings;
+  onChange: (patch: Partial<HotspotStyleOverride>) => void;
+  onReset: (key: keyof HotspotStyleOverride) => void;
+}) {
+  const showOutline = style.showOutline !== false;
+  const pulseEnabled = style.pulseEnabled ?? interaction.pulseEnabled;
+
+  return (
+    <div>
+      <label style={{ fontSize: 12, color: "var(--dy-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        Style de ce bloc
+      </label>
+      <p style={{ fontSize: 11, color: "var(--dy-muted)", margin: "2px 0 8px" }}>
+        Chaque réglage hérite du panneau 🎨 Style global sauf si tu le changes ici.
+      </p>
+
+      <label style={{ textTransform: "none", display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
+        <input
+          type="checkbox"
+          checked={showOutline}
+          onChange={(e) => (e.target.checked ? onReset("showOutline") : onChange({ showOutline: false }))}
+        />
+        Afficher le contour (pointillés)
+      </label>
+
+      {showOutline && (
+        <>
+          <div className="dy-field">
+            <label>Motif des pointillés{style.dashPattern === undefined ? " — global" : ""}</label>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                type="text"
+                value={style.dashPattern ?? interaction.dashPattern}
+                onChange={(e) => onChange({ dashPattern: e.target.value })}
+                placeholder={interaction.dashPattern}
+              />
+              {style.dashPattern !== undefined && (
+                <button className="dy-btn" onClick={() => onReset("dashPattern")}>
+                  ↺
+                </button>
+              )}
+            </div>
+          </div>
+
+          <OverrideRange
+            label="Épaisseur du contour sélectionné"
+            override={style.selectionStrokeWidth}
+            global={interaction.selectionStrokeWidth}
+            min={0.3}
+            max={2}
+            step={0.1}
+            onChange={(v) => onChange({ selectionStrokeWidth: v })}
+            onReset={() => onReset("selectionStrokeWidth")}
+          />
+        </>
+      )}
+
+      <OverrideRange
+        label="Teinte au survol / sélection"
+        override={style.hoverTintOpacity}
+        global={interaction.hoverTintOpacity}
+        min={0}
+        max={0.6}
+        step={0.02}
+        format={(v) => `${Math.round(v * 100)}%`}
+        onChange={(v) => onChange({ hoverTintOpacity: v })}
+        onReset={() => onReset("hoverTintOpacity")}
+      />
+
+      <OverrideRange
+        label="Arrondi du spotlight"
+        override={style.spotlightCornerRadius}
+        global={interaction.spotlightCornerRadius}
+        min={0}
+        max={10}
+        step={0.5}
+        onChange={(v) => onChange({ spotlightCornerRadius: v })}
+        onReset={() => onReset("spotlightCornerRadius")}
+      />
+
+      <label style={{ textTransform: "none", display: "flex", gap: 6, alignItems: "center", marginTop: 4 }}>
+        <input
+          type="checkbox"
+          checked={pulseEnabled}
+          onChange={(e) => onChange({ pulseEnabled: e.target.checked })}
+        />
+        Pastille pulsante (au repos)
+        {style.pulseEnabled !== undefined && (
+          <button className="dy-btn" onClick={() => onReset("pulseEnabled")} style={{ marginLeft: "auto" }}>
+            ↺
+          </button>
+        )}
+      </label>
+
+      {pulseEnabled && (
+        <>
+          <OverrideRange
+            label="Rayon min. pastille"
+            override={style.pulseMinRadius}
+            global={interaction.pulseMinRadius}
+            min={0.2}
+            max={2}
+            step={0.1}
+            onChange={(v) => onChange({ pulseMinRadius: v })}
+            onReset={() => onReset("pulseMinRadius")}
+          />
+          <OverrideRange
+            label="Rayon max. pastille"
+            override={style.pulseMaxRadius}
+            global={interaction.pulseMaxRadius}
+            min={1}
+            max={6}
+            step={0.2}
+            onChange={(v) => onChange({ pulseMaxRadius: v })}
+            onReset={() => onReset("pulseMaxRadius")}
+          />
+          <OverrideRange
+            label="Vitesse pastille (ms)"
+            override={style.pulseSpeedMs}
+            global={interaction.pulseSpeedMs}
+            min={600}
+            max={4000}
+            step={100}
+            onChange={(v) => onChange({ pulseSpeedMs: v })}
+            onReset={() => onReset("pulseSpeedMs")}
+          />
+        </>
+      )}
     </div>
   );
 }

@@ -228,6 +228,7 @@ export function buildSampleProject(): Project {
       spotlightShape: null,
       anchor: { x: cx, y: cy },
       seeAlso: [],
+      style: {},
       content: d.content,
     };
   });

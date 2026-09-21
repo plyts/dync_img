@@ -55,7 +55,29 @@ export interface Hotspot {
   connector?: Connector | null;
   /** Ids of other hotspots surfaced as "Explorer aussi" in the panel. */
   seeAlso: string[];
+  /** Per-block visual overrides; `{}` = fully inherits the project style. */
+  style: HotspotStyleOverride;
   content: HotspotContent;
+}
+
+/**
+ * Per-block visual overrides. Every field is optional: unset = inherit the
+ * project-wide value from `theme.interaction`. This is how you make one
+ * frame's outline thinner, a sub-block's dashes shorter, or turn off the
+ * outline/pulse entirely on a single block — without touching the rest.
+ */
+export interface HotspotStyleOverride {
+  /** false = no dashed contour at all on this block, in any state. */
+  showOutline?: boolean;
+  /** "dash-length gap-length" in image-percent units, e.g. "2 1.4". */
+  dashPattern?: string;
+  hoverTintOpacity?: number;
+  selectionStrokeWidth?: number;
+  spotlightCornerRadius?: number;
+  pulseEnabled?: boolean;
+  pulseMinRadius?: number;
+  pulseMaxRadius?: number;
+  pulseSpeedMs?: number;
 }
 
 export interface Group {
