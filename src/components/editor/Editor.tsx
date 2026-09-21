@@ -7,6 +7,7 @@ import { Inspector } from "./Inspector";
 import { GroupsPanel } from "./GroupsPanel";
 import { StylePanel } from "./StylePanel";
 import { AIAssistModal } from "./AIAssistModal";
+import { MiniPreview } from "./MiniPreview";
 import { readImageFile, exportProjectJson, readProjectFile, downloadTextFile } from "../../lib/projectIO";
 import { buildStandaloneHtml } from "../../lib/exportBundle";
 import { boundingBox } from "../../lib/geometry";
@@ -22,6 +23,7 @@ export function Editor() {
   const [aiOpen, setAiOpen] = useState(false);
   const [aiRegion, setAiRegion] = useState<PercentRect | null>(null);
   const [styleOpen, setStyleOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
 
@@ -146,6 +148,13 @@ export function Editor() {
             🎨 Style
           </button>
           <button
+            className={`dy-btn${previewOpen ? " active" : ""}`}
+            onClick={() => setPreviewOpen((v) => !v)}
+            title="Voir en direct le rendu réel pendant que tu modifies les paramètres"
+          >
+            👁 Aperçu en direct
+          </button>
+          <button
             className="dy-btn"
             onClick={() => {
               setAiRegion(null);
@@ -214,6 +223,7 @@ export function Editor() {
               onDrawModeChange={setDrawMode}
             />
           </Stage>
+          {previewOpen && <MiniPreview selectedId={selectedId} onClose={() => setPreviewOpen(false)} />}
         </div>
 
         <div className="dy-sidebar">

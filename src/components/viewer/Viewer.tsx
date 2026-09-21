@@ -4,11 +4,29 @@ import { Stage } from "../Stage";
 import { HotspotsLayer } from "./HotspotsLayer";
 import { DetailPanel } from "./DetailPanel";
 
-export function Viewer() {
+interface ViewerProps {
+  /**
+   * When provided (even as `null`), the viewer's selection follows this id
+   * instead of only its own clicks — used by the editor's live preview so
+   * selecting a block in the Inspector opens the same block here. The user
+   * can still click other blocks inside the preview to explore; the next
+   * change to this prop re-syncs it.
+   */
+  syncSelectedId?: string | null;
+}
+
+export function Viewer({ syncSelectedId }: ViewerProps = {}) {
   const { project } = useProject();
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [playKey, setPlayKey] = useState(0);
+
+  useEffect(() => {
+    if (syncSelectedId === undefined) return;
+    setSelectedId(syncSelectedId);
+    setPlayKey((k) => k + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncSelectedId]);
 
   const sorted = useMemo(
     () => [...project.hotspots].sort((a, b) => a.order - b.order),

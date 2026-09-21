@@ -559,6 +559,63 @@ body {
   color: var(--dy-bg);
 }
 
+.dy-btn.active {
+  background: var(--dy-ink);
+  color: var(--dy-bg);
+  border-color: var(--dy-ink);
+}
+
+/* ---- Editor: mini live preview ---- */
+
+.dy-mini-preview {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 20;
+  background: var(--dy-panel-bg);
+  border: 1px solid var(--dy-editor-border);
+  border-radius: 10px;
+  box-shadow: var(--dy-shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dy-mini-preview-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--dy-editor-border);
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.dy-mini-preview-head span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dy-mini-preview-head .dy-btn {
+  padding: 2px 7px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.dy-mini-preview-frame {
+  position: relative;
+  overflow: hidden;
+  background: var(--dy-bg);
+}
+
+.dy-mini-preview-scaler {
+  transform-origin: top left;
+}
+
 .dy-draw-svg {
   position: absolute;
   inset: 0;
