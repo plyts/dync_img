@@ -18,13 +18,14 @@ interface ObjectsLayerProps {
 type RectObject = TextObject | ImageObject | ShapeObject;
 
 function isRectObject(o: CanvasObject): o is RectObject {
-  return o.kind !== "line";
+  return o.kind !== "line" && o.kind !== "pulse";
 }
 
 type DragSession =
   | { type: "move"; id: string; start: Point; startX: number; startY: number }
   | { type: "resize"; id: string; handle: RectHandle; start: Point; startShape: { kind: "rect"; x: number; y: number; w: number; h: number } }
-  | { type: "line-endpoint"; id: string; which: "from" | "to"; start: Point; startPoint: Point };
+  | { type: "line-endpoint"; id: string; which: "from" | "to"; start: Point; startPoint: Point }
+  | { type: "point"; id: string; start: Point; startPoint: Point };
 
 const HANDLES: RectHandle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 
@@ -35,6 +36,7 @@ export function ObjectsLayer({ objects, hotspots, selectedId, interactive, onSel
   const [draftLinePoint, setDraftLinePoint] = useState<{ id: string; which: "from" | "to"; point: Point } | null>(
     null,
   );
+  const [draftPoint, setDraftPoint] = useState<{ id: string; point: Point } | null>(null);
 
   function toPt(e: { clientX: number; clientY: number }): Point {
     return clientToPercent(svgRef.current!, e.clientX, e.clientY);
@@ -64,12 +66,14 @@ export function ObjectsLayer({ objects, hotspots, selectedId, interactive, onSel
     } else if (session.type === "resize") {
       const next = resizeRect(session.startShape, session.handle, dx, dy);
       setDraftBox({ id: session.id, x: next.x, y: next.y, w: next.w, h: next.h });
-    } else {
+    } else if (session.type === "line-endpoint") {
       setDraftLinePoint({
         id: session.id,
         which: session.which,
         point: { x: session.startPoint.x + dx, y: session.startPoint.y + dy },
       });
+    } else {
+      setDraftPoint({ id: session.id, point: { x: session.startPoint.x + dx, y: session.startPoint.y + dy } });
     }
   }
 
@@ -78,13 +82,16 @@ export function ObjectsLayer({ objects, hotspots, selectedId, interactive, onSel
     if (session) {
       if (session.type === "line-endpoint" && draftLinePoint && draftLinePoint.id === session.id) {
         onChange(session.id, session.which === "from" ? { from: draftLinePoint.point } : { to: draftLinePoint.point });
-      } else if (session.type !== "line-endpoint" && draftBox && draftBox.id === session.id) {
+      } else if (session.type === "point" && draftPoint && draftPoint.id === session.id) {
+        onChange(session.id, { x: draftPoint.point.x, y: draftPoint.point.y });
+      } else if (session.type !== "line-endpoint" && session.type !== "point" && draftBox && draftBox.id === session.id) {
         onChange(session.id, { x: draftBox.x, y: draftBox.y, w: draftBox.w, h: draftBox.h });
       }
     }
     dragRef.current = null;
     setDraftBox(null);
     setDraftLinePoint(null);
+    setDraftPoint(null);
   }
 
   return (
@@ -140,6 +147,33 @@ export function ObjectsLayer({ objects, hotspots, selectedId, interactive, onSel
                     />
                   );
                 })}
+            </g>
+          );
+        }
+
+        if (o.kind === "pulse") {
+          const p = draftPoint && draftPoint.id === o.id ? draftPoint.point : o;
+          return (
+            <g key={o.id} style={{ pointerEvents: interactive && !o.hidden ? "auto" : "none" }}>
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r={Math.max(o.maxRadius, 2)}
+                fill="transparent"
+                stroke={isSelected ? "var(--dy-ink)" : "transparent"}
+                strokeWidth={0.4}
+                strokeDasharray="1.4 1"
+                style={{ cursor: interactive ? "move" : "default" }}
+                onPointerDown={(e) => {
+                  if (!interactive) return;
+                  e.stopPropagation();
+                  onSelect(o.id);
+                  const pt = toPt(e);
+                  dragRef.current = { type: "point", id: o.id, start: pt, startPoint: { x: o.x, y: o.y } };
+                  (e.target as Element).setPointerCapture(e.pointerId);
+                }}
+              />
+              <CanvasObjectContent obj={{ ...o, x: p.x, y: p.y }} hotspots={hotspots} />
             </g>
           );
         }

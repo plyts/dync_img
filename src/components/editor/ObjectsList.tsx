@@ -15,12 +15,14 @@ const KIND_ICON: Record<CanvasObject["kind"], string> = {
   image: "🖼",
   shape: "▭",
   line: "／",
+  pulse: "🔵",
 };
 
 function labelFor(o: CanvasObject, hotspots: Hotspot[]): string {
   if (o.kind === "text") return o.text.trim() ? o.text.trim().slice(0, 24) : "Texte vide";
   if (o.kind === "image") return o.alt || "Image";
   if (o.kind === "shape") return o.shapeType === "ellipse" ? "Forme (ellipse)" : "Forme (rectangle)";
+  if (o.kind === "pulse") return "Point pulsé";
   const nameOf = (id: string | null) => (id ? (hotspots.find((h) => h.id === id)?.label ?? "?") : "libre");
   return `Ligne : ${nameOf(o.fromHotspotId)} → ${nameOf(o.toHotspotId)}`;
 }

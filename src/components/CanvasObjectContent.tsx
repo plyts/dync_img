@@ -35,6 +35,16 @@ export function CanvasObjectContent({ obj, hotspots = [] }: { obj: CanvasObject;
     );
   }
 
+  if (obj.kind === "pulse") {
+    const style = {
+      "--hs-color": obj.color,
+      "--dy-pulse-min": obj.minRadius,
+      "--dy-pulse-max": obj.maxRadius,
+      "--dy-pulse-speed": `${obj.speedMs}ms`,
+    } as CSSProperties;
+    return <circle cx={obj.x} cy={obj.y} className="dy-pulse" style={style} pointerEvents="none" />;
+  }
+
   if (obj.kind === "text") {
     const lines = obj.text.split("\n");
     const anchor = obj.align === "center" ? "middle" : obj.align === "right" ? "end" : "start";

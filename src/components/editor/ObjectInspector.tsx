@@ -14,6 +14,7 @@ const KIND_LABEL: Record<CanvasObject["kind"], string> = {
   image: "Image / icône",
   shape: "Forme",
   line: "Ligne",
+  pulse: "Point pulsé",
 };
 
 export function ObjectInspector({ object, hotspots, onChange, onDelete, onBringToFront, onSendToBack }: ObjectInspectorProps) {
@@ -160,6 +161,48 @@ export function ObjectInspector({ object, hotspots, onChange, onDelete, onBringT
                 </button>
               )}
             </div>
+          </div>
+        </>
+      )}
+
+      {object.kind === "pulse" && (
+        <>
+          <div className="dy-field">
+            <label>Couleur</label>
+            <input type="color" value={object.color} onChange={(e) => onChange({ color: e.target.value })} />
+          </div>
+          <div className="dy-field">
+            <label>Rayon min. ({object.minRadius.toFixed(1)})</label>
+            <input
+              type="range"
+              min={0.2}
+              max={2}
+              step={0.1}
+              value={object.minRadius}
+              onChange={(e) => onChange({ minRadius: Number(e.target.value) })}
+            />
+          </div>
+          <div className="dy-field">
+            <label>Rayon max. ({object.maxRadius.toFixed(1)})</label>
+            <input
+              type="range"
+              min={1}
+              max={6}
+              step={0.2}
+              value={object.maxRadius}
+              onChange={(e) => onChange({ maxRadius: Number(e.target.value) })}
+            />
+          </div>
+          <div className="dy-field">
+            <label>Vitesse ({object.speedMs} ms)</label>
+            <input
+              type="range"
+              min={600}
+              max={4000}
+              step={100}
+              value={object.speedMs}
+              onChange={(e) => onChange({ speedMs: Number(e.target.value) })}
+            />
           </div>
         </>
       )}

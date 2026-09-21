@@ -217,6 +217,33 @@ export function Editor() {
             <button onClick={() => selectObject(store.addLineObject().id)} disabled={!project.image.src}>
               ／ Ligne
             </button>
+            <button onClick={() => selectObject(store.addPulseObject().id)} disabled={!project.image.src}>
+              🔵 Point pulsé
+            </button>
+          </div>
+          <div className="tool-group">
+            <button
+              onClick={() => {
+                const created = store.addLineObject();
+                store.updateObject(created.id, (o) => ({ ...o, animated: true }));
+                selectObject(created.id);
+              }}
+              disabled={!project.image.src}
+              title="Ligne pointillée déjà réglée en défilement animé"
+            >
+              ┄ Ligne animée
+            </button>
+            <button
+              onClick={() => {
+                const created = store.addLineObject();
+                store.updateObject(created.id, (o) => ({ ...o, dotEnabled: true }));
+                selectObject(created.id);
+              }}
+              disabled={!project.image.src}
+              title="Ligne déjà réglée avec un point qui voyage du début à la fin"
+            >
+              ．→ Ligne + point
+            </button>
           </div>
           <input
             ref={objectImageInputRef}

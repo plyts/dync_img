@@ -148,7 +148,7 @@ export interface ImageMeta {
  * shape) are draggable/resizable via x/y/w/h like everything else; the line
  * kind is dragged by its two endpoints instead.
  */
-export type CanvasObjectKind = "text" | "image" | "shape" | "line";
+export type CanvasObjectKind = "text" | "image" | "shape" | "line" | "pulse";
 
 interface CanvasObjectMeta {
   id: string;
@@ -218,7 +218,23 @@ export interface LineObject extends CanvasObjectMeta {
   speedMs: number;
 }
 
-export type CanvasObject = TextObject | ImageObject | ShapeObject | LineObject;
+/**
+ * A standalone pulsing point — the same idle "there's something here" badge
+ * used on hotspots, but free-standing and not tied to any block. One of the
+ * ready-made animated widgets (alongside the line's own dash/dot animations)
+ * you drop onto the image and tweak, rather than build from scratch.
+ */
+export interface PulseObject extends CanvasObjectMeta {
+  kind: "pulse";
+  x: number;
+  y: number;
+  color: string;
+  minRadius: number;
+  maxRadius: number;
+  speedMs: number;
+}
+
+export type CanvasObject = TextObject | ImageObject | ShapeObject | LineObject | PulseObject;
 
 export interface Project {
   schemaVersion: 2;

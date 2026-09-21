@@ -6,7 +6,7 @@ import {
   useReducer,
   type ReactNode,
 } from "react";
-import type { CanvasObject, Group, Hotspot, HotspotShape, ImageMeta, ImageObject, LineObject, Project, ShapeObject, TextObject } from "../types";
+import type { CanvasObject, Group, Hotspot, HotspotShape, ImageMeta, ImageObject, LineObject, Project, PulseObject, ShapeObject, TextObject } from "../types";
 import { DEFAULT_PALETTE, emptyContent } from "../types";
 import { centroid, centroidOfAreas } from "../lib/geometry";
 
@@ -163,6 +163,21 @@ function buildLineObject(project: Project): LineObject {
   };
 }
 
+function buildPulseObject(project: Project): PulseObject {
+  const o = spawnOffset(project);
+  return {
+    id: crypto.randomUUID(),
+    kind: "pulse",
+    order: project.objects.length,
+    x: 45 + o,
+    y: 45 + o,
+    color: "#2c2a27",
+    minRadius: 0.7,
+    maxRadius: 3,
+    speedMs: 2200,
+  };
+}
+
 export interface ProjectStore {
   project: Project;
   canUndo: boolean;
@@ -190,6 +205,7 @@ export interface ProjectStore {
   addShapeObject: (shapeType: "rect" | "ellipse") => ShapeObject;
   addImageObject: (src: string, alt: string) => ImageObject;
   addLineObject: () => LineObject;
+  addPulseObject: () => PulseObject;
   reorderObject: (id: string, direction: -1 | 1) => void;
   updateObject: (id: string, updater: (o: CanvasObject) => CanvasObject) => void;
   removeObject: (id: string) => void;
@@ -326,6 +342,11 @@ export function ProjectProvider({
       },
       addLineObject: () => {
         const created = buildLineObject(state.present);
+        update((p) => ({ ...p, objects: [...p.objects, created] }));
+        return created;
+      },
+      addPulseObject: () => {
+        const created = buildPulseObject(state.present);
         update((p) => ({ ...p, objects: [...p.objects, created] }));
         return created;
       },
