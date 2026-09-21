@@ -4,6 +4,8 @@ import { Stage } from "../Stage";
 import { HotspotsLayer } from "./HotspotsLayer";
 import { DetailPanel } from "./DetailPanel";
 import { CanvasObjectsView } from "./CanvasObjectsView";
+import { ObjectNotesHitLayer } from "./ObjectNotesHitLayer";
+import { ObjectNotesModal } from "./ObjectNotesModal";
 
 interface ViewerProps {
   /**
@@ -21,6 +23,8 @@ export function Viewer({ syncSelectedId }: ViewerProps = {}) {
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [playKey, setPlayKey] = useState(0);
+  const [notesObjectId, setNotesObjectId] = useState<string | null>(null);
+  const notesObject = project.objects.find((o) => o.id === notesObjectId) ?? null;
 
   useEffect(() => {
     if (syncSelectedId === undefined) return;
@@ -88,6 +92,7 @@ export function Viewer({ syncSelectedId }: ViewerProps = {}) {
             onSelect={select}
             onDeselect={() => setSelectedId(null)}
           />
+          <ObjectNotesHitLayer objects={project.objects} hotspots={project.hotspots} onOpenNotes={setNotesObjectId} />
         </Stage>
       </div>
       <DetailPanel
@@ -100,6 +105,7 @@ export function Viewer({ syncSelectedId }: ViewerProps = {}) {
         onReplay={() => setPlayKey((k) => k + 1)}
         onSelect={select}
       />
+      {notesObject && <ObjectNotesModal object={notesObject} onClose={() => setNotesObjectId(null)} />}
     </div>
   );
 }

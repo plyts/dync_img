@@ -98,8 +98,13 @@ function normalizeProject(raw: Record<string, unknown>): Record<string, unknown>
     if (!("connector" in h)) return withStyle;
     return { ...withStyle, connector: h.connector ? normalizeConnector(h.connector) : null };
   });
-  const objects = Array.isArray(raw.objects) ? raw.objects : [];
-  return { ...raw, theme: { ...theme, interaction }, groups, hotspots, objects };
+  const objects = (Array.isArray(raw.objects) ? raw.objects : []).map((o: Record<string, unknown>) => ({
+    notes: "",
+    groupId: null,
+    ...o,
+  }));
+  const objectGroups = Array.isArray(raw.objectGroups) ? raw.objectGroups : [];
+  return { ...raw, theme: { ...theme, interaction }, groups, hotspots, objects, objectGroups };
 }
 
 function validateProject(data: unknown): Project {

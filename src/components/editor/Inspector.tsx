@@ -1,8 +1,8 @@
 import { useState } from "react";
-import type { ReactNode } from "react";
 import type { CanvasObject, Group, Hotspot, HotspotStyleOverride, InteractionSettings, StepContent } from "../../types";
 import { effectiveHotspotStyle } from "../../lib/geometry";
 import { STYLE_PRESETS } from "../../lib/stylePresets";
+import { Section } from "./Section";
 
 interface InspectorProps {
   hotspot: Hotspot;
@@ -528,32 +528,6 @@ export function Inspector({
       <button className="dy-btn" onClick={onDelete} style={{ width: "100%" }}>
         Supprimer ce bloc
       </button>
-    </div>
-  );
-}
-
-function Section({
-  title,
-  defaultOpen = false,
-  children,
-}: {
-  title: string;
-  defaultOpen?: boolean;
-  children: ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="dy-insp-section">
-      <button
-        type="button"
-        className="dy-insp-section-header"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-      >
-        <span className={`dy-insp-chevron${open ? " open" : ""}`}>▸</span>
-        <span className="dy-insp-section-title">{title}</span>
-      </button>
-      {open && <div className="dy-insp-section-body">{children}</div>}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useProject } from "../../state/store";
 import { Stage } from "../Stage";
 import { DrawLayer, type DrawMode, type Tool } from "./DrawLayer";
@@ -29,6 +29,14 @@ export function Editor() {
   const [aiRegion, setAiRegion] = useState<PercentRect | null>(null);
   const [styleOpen, setStyleOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem("dy-sidebar-width"));
+      return saved >= 280 && saved <= 720 ? saved : 360;
+    } catch {
+      return 360;
+    }
+  });
   const imageInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
   const objectImageInputRef = useRef<HTMLInputElement>(null);
@@ -78,6 +86,30 @@ export function Editor() {
     const { width, height } = parseSvgIntrinsicSize(text);
     const created = store.addEmbedObject("svg", text, width, height);
     selectObject(created.id);
+  }
+
+  function startSidebarResize(e: ReactPointerEvent) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+    function onMove(ev: PointerEvent) {
+      const next = Math.min(720, Math.max(280, startWidth - (ev.clientX - startX)));
+      setSidebarWidth(next);
+    }
+    function onUp() {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setSidebarWidth((w) => {
+        try {
+          localStorage.setItem("dy-sidebar-width", String(w));
+        } catch {
+          // storage unavailable — width just won't persist across sessions
+        }
+        return w;
+      });
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   }
 
   async function handleImageUpload(file: File) {
@@ -356,7 +388,8 @@ export function Editor() {
           {previewOpen && <MiniPreview selectedId={selectedId} onClose={() => setPreviewOpen(false)} />}
         </div>
 
-        <div className="dy-sidebar">
+        <div className="dy-sidebar-resize-handle" onPointerDown={startSidebarResize} title="Redimensionner" />
+        <div className="dy-sidebar" style={{ width: sidebarWidth, flexBasis: sidebarWidth }}>
           <HotspotList
             hotspots={project.hotspots}
             selectedId={selectedId}
@@ -367,6 +400,7 @@ export function Editor() {
           <ObjectsList
             objects={project.objects}
             hotspots={project.hotspots}
+            objectGroups={project.objectGroups}
             selectedId={selectedObjectId}
             onSelect={selectObject}
             onReorder={store.reorderObject}
@@ -375,12 +409,17 @@ export function Editor() {
               store.removeObject(id);
               if (selectedObjectId === id) setSelectedObjectId(null);
             }}
+            onGroup={(ids) => store.groupObjects(ids)}
           />
 
           {selectedObject && (
             <ObjectInspector
               object={selectedObject}
               hotspots={project.hotspots}
+              objectGroups={project.objectGroups}
+              groupSiblings={project.objects.filter(
+                (o) => o.id !== selectedObject.id && o.groupId && o.groupId === selectedObject.groupId,
+              )}
               onChange={(patch) =>
                 store.updateObject(selectedObject.id, (o) => ({ ...o, ...patch }) as CanvasObject)
               }
@@ -390,6 +429,12 @@ export function Editor() {
               }}
               onBringToFront={() => store.bringObjectToFront(selectedObject.id)}
               onSendToBack={() => store.sendObjectToBack(selectedObject.id)}
+              onUngroup={() => {
+                if (selectedObject.groupId) store.ungroupObjects(selectedObject.groupId);
+              }}
+              onSyncField={(field, value) => {
+                if (selectedObject.groupId) store.syncGroupField(selectedObject.groupId, field, value);
+              }}
             />
           )}
 

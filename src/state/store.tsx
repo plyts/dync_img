@@ -6,7 +6,7 @@ import {
   useReducer,
   type ReactNode,
 } from "react";
-import type { CanvasObject, EmbedObject, Group, Hotspot, HotspotShape, ImageMeta, ImageObject, LineObject, Project, PulseObject, ShapeObject, TextObject } from "../types";
+import type { CanvasObject, EmbedObject, Group, Hotspot, HotspotShape, ImageMeta, ImageObject, LineObject, ObjectGroup, Project, PulseObject, ShapeObject, TextObject } from "../types";
 import { DEFAULT_PALETTE, emptyContent } from "../types";
 import { centroid, centroidOfAreas } from "../lib/geometry";
 
@@ -98,6 +98,8 @@ function buildTextObject(project: Project): TextObject {
     w: 24,
     h: 9,
     order: project.objects.length,
+    notes: "",
+    groupId: null,
     text: "Texte",
     color: "#2c2a27",
     fontSize: 3.2,
@@ -117,6 +119,8 @@ function buildShapeObject(project: Project, shapeType: "rect" | "ellipse"): Shap
     w: 22,
     h: 16,
     order: project.objects.length,
+    notes: "",
+    groupId: null,
     shapeType,
     strokeColor: "#2c2a27",
     strokeWidth: 0.6,
@@ -135,6 +139,8 @@ function buildImageObject(project: Project, src: string, alt: string): ImageObje
     w: 16,
     h: 16,
     order: project.objects.length,
+    notes: "",
+    groupId: null,
     src,
     alt,
     opacity: 1,
@@ -147,6 +153,8 @@ function buildLineObject(project: Project): LineObject {
     id: crypto.randomUUID(),
     kind: "line",
     order: project.objects.length,
+    notes: "",
+    groupId: null,
     from: { x: 25 + o, y: 25 + o },
     to: { x: 65 + o, y: 55 + o },
     fromHotspotId: null,
@@ -169,6 +177,8 @@ function buildPulseObject(project: Project): PulseObject {
     id: crypto.randomUUID(),
     kind: "pulse",
     order: project.objects.length,
+    notes: "",
+    groupId: null,
     x: 45 + o,
     y: 45 + o,
     color: "#2c2a27",
@@ -192,6 +202,8 @@ function buildEmbedObject(
     id: crypto.randomUUID(),
     kind: "embed",
     order: project.objects.length,
+    notes: "",
+    groupId: null,
     x: 35 + o,
     y: 35 + o,
     w,
@@ -233,6 +245,9 @@ export interface ProjectStore {
   addPulseObject: () => PulseObject;
   addEmbedObject: (format: "svg" | "html", markup: string, sourceW: number, sourceH: number) => EmbedObject;
   reorderObject: (id: string, direction: -1 | 1) => void;
+  groupObjects: (ids: string[], label?: string) => ObjectGroup;
+  ungroupObjects: (groupId: string) => void;
+  syncGroupField: (groupId: string, field: string, value: unknown) => void;
   updateObject: (id: string, updater: (o: CanvasObject) => CanvasObject) => void;
   removeObject: (id: string) => void;
   bringObjectToFront: (id: string) => void;
@@ -415,6 +430,28 @@ export function ProjectProvider({
           });
           return { ...p, objects };
         }),
+      groupObjects: (ids, label) => {
+        const group: ObjectGroup = { id: crypto.randomUUID(), label: label ?? `Groupe ${state.present.objectGroups.length + 1}` };
+        update((p) => ({
+          ...p,
+          objectGroups: [...p.objectGroups, group],
+          objects: p.objects.map((o) => (ids.includes(o.id) ? { ...o, groupId: group.id } : o)),
+        }));
+        return group;
+      },
+      ungroupObjects: (groupId) =>
+        update((p) => ({
+          ...p,
+          objectGroups: p.objectGroups.filter((g) => g.id !== groupId),
+          objects: p.objects.map((o) => (o.groupId === groupId ? { ...o, groupId: null } : o)),
+        })),
+      syncGroupField: (groupId, field, value) =>
+        update((p) => ({
+          ...p,
+          objects: p.objects.map((o) =>
+            o.groupId === groupId && Object.prototype.hasOwnProperty.call(o, field) ? { ...o, [field]: value } : o,
+          ),
+        })),
     };
   }, [state, update]);
 

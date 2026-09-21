@@ -2,8 +2,12 @@ import type { CanvasObject, Hotspot } from "../../types";
 import { CanvasObjectContent } from "../CanvasObjectContent";
 
 /** Static, non-interactive render of the project's freeform objects —
- *  decorative/annotative, not clickable, sitting behind the hotspots layer
- *  so a hotspot's spotlight/hit-area always wins on overlap. */
+ *  purely decorative, sitting behind the hotspots layer so a hotspot's
+ *  spotlight/hit-area always wins on overlap. Objects that carry notes
+ *  still get a click target, but from ObjectNotesHitLayer (rendered above
+ *  the hotspots layer instead) — otherwise HotspotsLayer's own full-bleed
+ *  "click empty space to deselect" rect, painted on top of this one, would
+ *  swallow every click before it ever reached an object underneath. */
 export function CanvasObjectsView({ objects, hotspots }: { objects: CanvasObject[]; hotspots: Hotspot[] }) {
   if (objects.length === 0) return null;
   return (

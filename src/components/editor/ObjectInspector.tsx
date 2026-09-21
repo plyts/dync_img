@@ -1,14 +1,20 @@
 import { useRef } from "react";
-import type { CanvasObject, Hotspot } from "../../types";
+import type { CanvasObject, Hotspot, ObjectGroup } from "../../types";
 import { parseSvgIntrinsicSize, readTextFile } from "../../lib/svgImport";
+import { renderMarkdown } from "../../lib/markdown";
+import { Section } from "./Section";
 
 interface ObjectInspectorProps {
   object: CanvasObject;
   hotspots: Hotspot[];
+  objectGroups: ObjectGroup[];
+  groupSiblings: CanvasObject[];
   onChange: (patch: Partial<CanvasObject>) => void;
   onDelete: () => void;
   onBringToFront: () => void;
   onSendToBack: () => void;
+  onUngroup: () => void;
+  onSyncField: (field: string, value: unknown) => void;
 }
 
 const KIND_LABEL: Record<CanvasObject["kind"], string> = {
@@ -20,21 +26,46 @@ const KIND_LABEL: Record<CanvasObject["kind"], string> = {
   embed: "Fichier importé",
 };
 
-export function ObjectInspector({ object, hotspots, onChange, onDelete, onBringToFront, onSendToBack }: ObjectInspectorProps) {
+/** Numeric/color fields worth offering as one-click "sync to the group"
+ *  actions — this is how two otherwise-independent objects (say, an
+ *  imported SVG pulse and a traveling-dot line) get "combined" into one
+ *  coordinated effect: push one's speed onto every sibling that has the
+ *  same field, instead of tuning each by hand. */
+const SYNCABLE_FIELDS: { field: string; label: string }[] = [
+  { field: "speedMs", label: "Vitesse (ms)" },
+  { field: "strokeColor", label: "Couleur du trait" },
+  { field: "color", label: "Couleur" },
+];
+
+export function ObjectInspector({
+  object,
+  hotspots,
+  objectGroups,
+  groupSiblings,
+  onChange,
+  onDelete,
+  onBringToFront,
+  onSendToBack,
+  onUngroup,
+  onSyncField,
+}: ObjectInspectorProps) {
+  const group = objectGroups.find((g) => g.id === object.groupId) ?? null;
+
   return (
     <div>
       <h3>{KIND_LABEL[object.kind]}</h3>
 
       {object.kind === "text" && (
-        <>
+        <Section title="Contenu" defaultOpen>
           <div className="dy-field">
-            <label>Contenu</label>
-            <textarea
-              rows={3}
-              value={object.text}
-              onChange={(e) => onChange({ text: e.target.value })}
-            />
+            <label>Texte</label>
+            <textarea rows={3} value={object.text} onChange={(e) => onChange({ text: e.target.value })} />
           </div>
+        </Section>
+      )}
+
+      {object.kind === "text" && (
+        <Section title="Apparence" defaultOpen>
           <div className="dy-field">
             <label>Couleur</label>
             <input type="color" value={object.color} onChange={(e) => onChange({ color: e.target.value })} />
@@ -52,20 +83,14 @@ export function ObjectInspector({ object, hotspots, onChange, onDelete, onBringT
           </div>
           <div className="dy-field">
             <label>Graisse</label>
-            <select
-              value={object.fontWeight}
-              onChange={(e) => onChange({ fontWeight: e.target.value as "normal" | "bold" })}
-            >
+            <select value={object.fontWeight} onChange={(e) => onChange({ fontWeight: e.target.value as "normal" | "bold" })}>
               <option value="normal">Normale</option>
               <option value="bold">Grasse</option>
             </select>
           </div>
           <div className="dy-field">
             <label>Alignement</label>
-            <select
-              value={object.align}
-              onChange={(e) => onChange({ align: e.target.value as "left" | "center" | "right" })}
-            >
+            <select value={object.align} onChange={(e) => onChange({ align: e.target.value as "left" | "center" | "right" })}>
               <option value="left">Gauche</option>
               <option value="center">Centré</option>
               <option value="right">Droite</option>
@@ -86,11 +111,11 @@ export function ObjectInspector({ object, hotspots, onChange, onDelete, onBringT
               )}
             </div>
           </div>
-        </>
+        </Section>
       )}
 
       {object.kind === "image" && (
-        <>
+        <Section title="Apparence" defaultOpen>
           <div className="dy-field">
             <label>Texte alternatif</label>
             <input type="text" value={object.alt} onChange={(e) => onChange({ alt: e.target.value })} />
@@ -106,28 +131,21 @@ export function ObjectInspector({ object, hotspots, onChange, onDelete, onBringT
               onChange={(e) => onChange({ opacity: Number(e.target.value) })}
             />
           </div>
-        </>
+        </Section>
       )}
 
       {object.kind === "shape" && (
-        <>
+        <Section title="Apparence" defaultOpen>
           <div className="dy-field">
             <label>Forme</label>
-            <select
-              value={object.shapeType}
-              onChange={(e) => onChange({ shapeType: e.target.value as "rect" | "ellipse" })}
-            >
+            <select value={object.shapeType} onChange={(e) => onChange({ shapeType: e.target.value as "rect" | "ellipse" })}>
               <option value="rect">Rectangle</option>
               <option value="ellipse">Ellipse</option>
             </select>
           </div>
           <div className="dy-field">
             <label>Couleur du trait</label>
-            <input
-              type="color"
-              value={object.strokeColor}
-              onChange={(e) => onChange({ strokeColor: e.target.value })}
-            />
+            <input type="color" value={object.strokeColor} onChange={(e) => onChange({ strokeColor: e.target.value })} />
           </div>
           <div className="dy-field">
             <label>Épaisseur du trait ({object.strokeWidth.toFixed(1)})</label>
@@ -165,13 +183,17 @@ export function ObjectInspector({ object, hotspots, onChange, onDelete, onBringT
               )}
             </div>
           </div>
-        </>
+        </Section>
       )}
 
-      {object.kind === "embed" && <EmbedFields object={object} onChange={onChange} />}
+      {object.kind === "embed" && (
+        <Section title="Fichier" defaultOpen>
+          <EmbedFields object={object} onChange={onChange} />
+        </Section>
+      )}
 
       {object.kind === "pulse" && (
-        <>
+        <Section title="Apparence" defaultOpen>
           <div className="dy-field">
             <label>Couleur</label>
             <input type="color" value={object.color} onChange={(e) => onChange({ color: e.target.value })} />
@@ -198,6 +220,11 @@ export function ObjectInspector({ object, hotspots, onChange, onDelete, onBringT
               onChange={(e) => onChange({ maxRadius: Number(e.target.value) })}
             />
           </div>
+        </Section>
+      )}
+
+      {object.kind === "pulse" && (
+        <Section title="Animation" defaultOpen>
           <div className="dy-field">
             <label>Vitesse ({object.speedMs} ms)</label>
             <input
@@ -209,17 +236,14 @@ export function ObjectInspector({ object, hotspots, onChange, onDelete, onBringT
               onChange={(e) => onChange({ speedMs: Number(e.target.value) })}
             />
           </div>
-        </>
+        </Section>
       )}
 
       {object.kind === "line" && (
-        <>
+        <Section title="Connexions" defaultOpen>
           <div className="dy-field">
             <label>Point de départ</label>
-            <select
-              value={object.fromHotspotId ?? ""}
-              onChange={(e) => onChange({ fromHotspotId: e.target.value || null })}
-            >
+            <select value={object.fromHotspotId ?? ""} onChange={(e) => onChange({ fromHotspotId: e.target.value || null })}>
               <option value="">Libre (glisser sur l'image)</option>
               {hotspots.map((h) => (
                 <option key={h.id} value={h.id}>
@@ -230,10 +254,7 @@ export function ObjectInspector({ object, hotspots, onChange, onDelete, onBringT
           </div>
           <div className="dy-field">
             <label>Point d'arrivée</label>
-            <select
-              value={object.toHotspotId ?? ""}
-              onChange={(e) => onChange({ toHotspotId: e.target.value || null })}
-            >
+            <select value={object.toHotspotId ?? ""} onChange={(e) => onChange({ toHotspotId: e.target.value || null })}>
               <option value="">Libre (glisser sur l'image)</option>
               {hotspots.map((h) => (
                 <option key={h.id} value={h.id}>
@@ -242,10 +263,15 @@ export function ObjectInspector({ object, hotspots, onChange, onDelete, onBringT
               ))}
             </select>
           </div>
-          <label style={{ textTransform: "none", display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
+          <label style={{ textTransform: "none", display: "flex", gap: 6, alignItems: "center" }}>
             <input type="checkbox" checked={object.curved} onChange={(e) => onChange({ curved: e.target.checked })} />
             Ligne courbe (sinon droite)
           </label>
+        </Section>
+      )}
+
+      {object.kind === "line" && (
+        <Section title="Apparence" defaultOpen>
           <div className="dy-field">
             <label>Couleur</label>
             <input type="color" value={object.strokeColor} onChange={(e) => onChange({ strokeColor: e.target.value })} />
@@ -271,6 +297,11 @@ export function ObjectInspector({ object, hotspots, onChange, onDelete, onBringT
               <option value="solid">Continu</option>
             </select>
           </div>
+        </Section>
+      )}
+
+      {object.kind === "line" && (
+        <Section title="Animation" defaultOpen>
           <label style={{ textTransform: "none", display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
             <input type="checkbox" checked={object.animated} onChange={(e) => onChange({ animated: e.target.checked })} />
             Pointillés animés (défilement)
@@ -311,8 +342,61 @@ export function ObjectInspector({ object, hotspots, onChange, onDelete, onBringT
               />
             </div>
           )}
-        </>
+        </Section>
       )}
+
+      <Section title="Notes (Markdown)">
+        <p style={{ fontSize: 11, color: "var(--dy-muted)", margin: "0 0 6px" }}>
+          Commentaires, détails, liens (y compris vers un portfolio externe) — si ce champ n'est pas
+          vide, l'objet devient cliquable dans l'aperçu/export et ouvre ces notes dans une fenêtre.
+        </p>
+        <textarea
+          rows={5}
+          value={object.notes}
+          onChange={(e) => onChange({ notes: e.target.value })}
+          placeholder={"Détails, remarques…\n[Voir le projet complet](https://mon-portfolio.exemple)"}
+          className="dy-code-textarea"
+        />
+        {object.notes.trim() && (
+          <div
+            className="dy-md-notes-preview"
+            dangerouslySetInnerHTML={{ __html: renderMarkdown(object.notes) }}
+          />
+        )}
+      </Section>
+
+      <Section title="Combiner (groupe)">
+        {group ? (
+          <>
+            <p style={{ fontSize: 12, margin: "0 0 8px" }}>
+              Membre du groupe « {group.label} » ({groupSiblings.length + 1} objets).
+            </p>
+            {SYNCABLE_FIELDS.filter(
+              ({ field }) =>
+                Object.prototype.hasOwnProperty.call(object, field) &&
+                groupSiblings.some((s) => Object.prototype.hasOwnProperty.call(s, field)),
+            ).map(({ field, label }) => (
+              <button
+                key={field}
+                className="dy-btn"
+                style={{ width: "100%", marginBottom: 6 }}
+                onClick={() => onSyncField(field, (object as unknown as Record<string, unknown>)[field])}
+              >
+                🔗 Synchroniser « {label} » sur le groupe
+              </button>
+            ))}
+            <button className="dy-btn" style={{ width: "100%" }} onClick={onUngroup}>
+              Dissoudre le groupe
+            </button>
+          </>
+        ) : (
+          <p style={{ fontSize: 12, color: "var(--dy-muted)", margin: 0 }}>
+            Sélectionne plusieurs objets dans la liste « Objets libres » puis clique « Grouper » pour
+            les combiner — utile par ex. pour synchroniser la vitesse d'un point pulsé importé et
+            d'une ligne animée.
+          </p>
+        )}
+      </Section>
 
       <div className="dy-field">
         <label>Empilement</label>
@@ -380,12 +464,7 @@ function EmbedFields({
       />
       <div className="dy-field">
         <label>Code source</label>
-        <textarea
-          rows={8}
-          value={object.markup}
-          onChange={(e) => onChange({ markup: e.target.value })}
-          className="dy-code-textarea"
-        />
+        <textarea rows={8} value={object.markup} onChange={(e) => onChange({ markup: e.target.value })} className="dy-code-textarea" />
       </div>
     </>
   );

@@ -154,6 +154,20 @@ interface CanvasObjectMeta {
   id: string;
   order: number;
   hidden?: boolean;
+  /** Markdown notes/comments/links for this object — shown in a modal when
+   *  the viewer clicks it (only objects with non-empty notes become
+   *  clickable there; otherwise they stay purely decorative). */
+  notes: string;
+  /** Objects sharing a groupId can have their matching parameters (e.g.
+   *  animation speed) synced together from the inspector — how you
+   *  "combine" two otherwise-independent objects, like a pulse and a
+   *  traveling-dot line, into one coordinated effect. */
+  groupId?: string | null;
+}
+
+export interface ObjectGroup {
+  id: string;
+  label: string;
 }
 
 interface RectObjectBase extends CanvasObjectMeta {
@@ -261,6 +275,7 @@ export interface Project {
   groups: Group[];
   hotspots: Hotspot[];
   objects: CanvasObject[];
+  objectGroups: ObjectGroup[];
   theme: ProjectTheme;
   createdAt: string;
   updatedAt: string;
@@ -317,6 +332,7 @@ export function createEmptyProject(name = "Nouveau projet"): Project {
     groups: [],
     hotspots: [],
     objects: [],
+    objectGroups: [],
     theme: {
       palette: DEFAULT_PALETTE,
       fontDisplay: "Caveat",
