@@ -229,6 +229,7 @@ export function buildSampleProject(): Project {
       anchor: { x: cx, y: cy },
       seeAlso: [],
       style: {},
+      customCss: "",
       content: d.content,
     };
   });

@@ -31,6 +31,13 @@ export interface Connector {
   /** Straight line, or a gentle arc — always has a defined start (the
    *  hotspot's anchor) and end (`to`), just a different path between them. */
   curved: boolean;
+  /** Every field below is optional: unset = inherit the project-wide
+   *  interaction settings (or the hotspot's own color for `color`). */
+  strokeWidth?: number;
+  dotRadius?: number;
+  dotSpeedMs?: number;
+  ringSpeedMs?: number;
+  color?: string;
 }
 
 export interface Hotspot {
@@ -57,6 +64,15 @@ export interface Hotspot {
   seeAlso: string[];
   /** Per-block visual overrides; `{}` = fully inherits the project style. */
   style: HotspotStyleOverride;
+  /**
+   * Raw CSS, scoped automatically to this block (every element belonging to
+   * it carries a `.hs-{id}` class). Use `&` for compound state selectors on
+   * the frame itself, e.g. `&.hovered { stroke-width: 2; }` or
+   * `&.selected { animation: spin 3s linear infinite; }`. This is the escape
+   * hatch for anything the structured fields above don't cover — literally
+   * any CSS property, any animation, on this one block.
+   */
+  customCss: string;
   content: HotspotContent;
 }
 
@@ -125,6 +141,160 @@ export interface ImageMeta {
   alt: string;
 }
 
+/**
+ * Freeform objects placed directly on the image — independent of hotspots.
+ * Purely decorative/annotative: they render in the viewer and export but
+ * aren't clickable there. In the editor, the rect-shaped kinds (text, image,
+ * shape) are draggable/resizable via x/y/w/h like everything else; the line
+ * kind is dragged by its two endpoints instead.
+ */
+export type CanvasObjectKind = "text" | "image" | "shape" | "line" | "pulse" | "embed";
+
+interface CanvasObjectMeta {
+  id: string;
+  order: number;
+  hidden?: boolean;
+  /** Markdown notes/comments/links for this object — shown in a modal when
+   *  the viewer clicks it (only objects with non-empty notes become
+   *  clickable there; otherwise they stay purely decorative). */
+  notes: string;
+  /** Objects sharing a groupId can have their matching parameters (e.g.
+   *  animation speed) synced together from the inspector — how you
+   *  "combine" two otherwise-independent objects, like a pulse and a
+   *  traveling-dot line, into one coordinated effect. */
+  groupId?: string | null;
+  /** Set when this object is the auto-generated "en savoir plus" note
+   *  marker for a hotspot (AI content-draft flow, "Rédiger le contenu").
+   *  Lets re-running the draft update the existing marker instead of
+   *  spawning a duplicate, and lets deleting the hotspot clean it up too.
+   *  `null`/unset for every ordinary, manually placed object. */
+  noteForHotspotId?: string | null;
+}
+
+export interface ObjectGroup {
+  id: string;
+  label: string;
+}
+
+interface RectObjectBase extends CanvasObjectMeta {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface TextObject extends RectObjectBase {
+  kind: "text";
+  text: string;
+  color: string;
+  /** Font size in percent of the image width — stays proportional at any
+   *  export size, like every other measurement in this app. */
+  fontSize: number;
+  fontWeight: "normal" | "bold";
+  align: "left" | "center" | "right";
+  background: string | null;
+}
+
+export interface ImageObject extends RectObjectBase {
+  kind: "image";
+  src: string;
+  alt: string;
+  opacity: number;
+}
+
+export interface ShapeObject extends RectObjectBase {
+  kind: "shape";
+  shapeType: "rect" | "ellipse";
+  strokeColor: string;
+  strokeWidth: number;
+  fill: string;
+  dashPattern: string;
+}
+
+/**
+ * An imported animation file — an SVG (its own SMIL/CSS animations play
+ * natively once embedded) or a raw HTML+CSS+JS snippet — placed on the
+ * image and manipulated exactly like any other object: moved, resized,
+ * deleted, reordered. `markup` is the file's/snippet's source, kept as-is;
+ * `sourceW`/`sourceH` are the SVG's own intrinsic size (parsed at import
+ * time), used to scale it correctly into the object's x/y/w/h box. Ignored
+ * for the "html" format, which fills its box directly.
+ */
+export interface EmbedObject extends RectObjectBase {
+  kind: "embed";
+  format: "svg" | "html";
+  markup: string;
+  sourceW: number;
+  sourceH: number;
+}
+
+/**
+ * A freestanding line between any two points — each end either free (a
+ * plain point) or anchored to a hotspot, in which case it follows that
+ * block if it moves. Independent of the per-hotspot/group Connector system:
+ * this one isn't tied to any selection, always visible, and can join any
+ * two blocks (or a block and a free point, or two free points).
+ */
+export interface LineObject extends CanvasObjectMeta {
+  kind: "line";
+  from: Point;
+  to: Point;
+  fromHotspotId: string | null;
+  toHotspotId: string | null;
+  curved: boolean;
+  strokeColor: string;
+  strokeWidth: number;
+  dashPattern: string;
+  /** Marching-ants dash animation along the line. */
+  animated: boolean;
+  /** A dot traveling from `from` to `to` on a loop. */
+  dotEnabled: boolean;
+  dotColor: string;
+  dotRadius: number;
+  /** Shared duration for both the dash march and the dot travel. */
+  speedMs: number;
+}
+
+/**
+ * A standalone pulsing point — the same idle "there's something here" badge
+ * used on hotspots, but free-standing and not tied to any block. One of the
+ * ready-made animated widgets (alongside the line's own dash/dot animations)
+ * you drop onto the image and tweak, rather than build from scratch.
+ */
+export interface PulseObject extends CanvasObjectMeta {
+  kind: "pulse";
+  x: number;
+  y: number;
+  color: string;
+  minRadius: number;
+  maxRadius: number;
+  speedMs: number;
+}
+
+export type CanvasObject = TextObject | ImageObject | ShapeObject | LineObject | PulseObject | EmbedObject;
+
+/**
+ * One beat in an animation sequence — either selects a hotspot (replaying
+ * its full existing reveal: spotlight, connector, panel, step stagger,
+ * typewriter) or briefly flashes a canvas object. `delayMs` is the pause
+ * before THIS step fires, measured from the previous step firing — so the
+ * sequence is really a cue sheet/timeline: each row's delay is its offset
+ * from the row above.
+ */
+export interface SequenceStep {
+  id: string;
+  targetType: "hotspot" | "object";
+  targetId: string;
+  delayMs: number;
+}
+
+export interface AnimationSequence {
+  id: string;
+  label: string;
+  steps: SequenceStep[];
+  loop: boolean;
+}
+
 export interface Project {
   schemaVersion: 2;
   id: string;
@@ -132,6 +302,9 @@ export interface Project {
   image: ImageMeta;
   groups: Group[];
   hotspots: Hotspot[];
+  objects: CanvasObject[];
+  objectGroups: ObjectGroup[];
+  sequences: AnimationSequence[];
   theme: ProjectTheme;
   createdAt: string;
   updatedAt: string;
@@ -163,7 +336,7 @@ export const DEFAULT_INTERACTION: InteractionSettings = {
   typewriterSpeedMs: 14,
   panelWidthPx: 440,
   focusFollowsHover: true,
-  showPanelConnector: true,
+  showPanelConnector: false,
   panelConnectorCurved: true,
 };
 
@@ -187,6 +360,9 @@ export function createEmptyProject(name = "Nouveau projet"): Project {
     image: { src: "", width: 0, height: 0, alt: name },
     groups: [],
     hotspots: [],
+    objects: [],
+    objectGroups: [],
+    sequences: [],
     theme: {
       palette: DEFAULT_PALETTE,
       fontDisplay: "Caveat",

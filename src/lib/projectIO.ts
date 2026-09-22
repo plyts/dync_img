@@ -94,11 +94,22 @@ function normalizeProject(raw: Record<string, unknown>): Record<string, unknown>
     connector: g.connector ? normalizeConnector(g.connector) : null,
   }));
   const hotspots = ((raw.hotspots as Record<string, unknown>[]) ?? []).map((h) => {
-    const withStyle = { ...h, style: (h.style as object) ?? {} };
+    const withStyle = { ...h, style: (h.style as object) ?? {}, customCss: (h.customCss as string) ?? "" };
     if (!("connector" in h)) return withStyle;
     return { ...withStyle, connector: h.connector ? normalizeConnector(h.connector) : null };
   });
-  return { ...raw, theme: { ...theme, interaction }, groups, hotspots };
+  const objects = (Array.isArray(raw.objects) ? raw.objects : []).map((o: Record<string, unknown>) => ({
+    notes: "",
+    groupId: null,
+    noteForHotspotId: null,
+    ...o,
+  }));
+  const objectGroups = Array.isArray(raw.objectGroups) ? raw.objectGroups : [];
+  const sequences = (Array.isArray(raw.sequences) ? raw.sequences : []).map((seq: Record<string, unknown>) => ({
+    loop: false,
+    ...seq,
+  }));
+  return { ...raw, theme: { ...theme, interaction }, groups, hotspots, objects, objectGroups, sequences };
 }
 
 function validateProject(data: unknown): Project {

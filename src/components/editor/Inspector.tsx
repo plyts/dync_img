@@ -1,5 +1,8 @@
 import { useState } from "react";
-import type { Group, Hotspot, HotspotStyleOverride, InteractionSettings, StepContent } from "../../types";
+import type { CanvasObject, Group, Hotspot, HotspotStyleOverride, InteractionSettings, StepContent } from "../../types";
+import { effectiveHotspotStyle } from "../../lib/geometry";
+import { STYLE_PRESETS } from "../../lib/stylePresets";
+import { Section } from "./Section";
 
 interface InspectorProps {
   hotspot: Hotspot;
@@ -7,6 +10,7 @@ interface InspectorProps {
   groups: Group[];
   palette: string[];
   interaction: InteractionSettings;
+  objects: CanvasObject[];
   onChange: (updater: (h: Hotspot) => Hotspot) => void;
   onDelete: () => void;
   onRemoveArea: (index: number) => void;
@@ -16,6 +20,7 @@ interface InspectorProps {
   onStartConnectorShape: () => void;
   onBringToFront: () => void;
   onSendToBack: () => void;
+  onSelectObject: (id: string) => void;
 }
 
 export function Inspector({
@@ -24,6 +29,7 @@ export function Inspector({
   groups,
   palette,
   interaction,
+  objects,
   onChange,
   onDelete,
   onRemoveArea,
@@ -33,14 +39,17 @@ export function Inspector({
   onStartConnectorShape,
   onBringToFront,
   onSendToBack,
+  onSelectObject,
 }: InspectorProps) {
   const group = groups.find((g) => g.id === hotspot.groupId) ?? null;
+  const linkedLines = objects.filter(
+    (o) => o.kind === "line" && (o.fromHotspotId === hotspot.id || o.toHotspotId === hotspot.id),
+  );
   const connectorMode: "inherit" | "none" | "custom" =
     hotspot.connector === undefined ? "inherit" : hotspot.connector === null ? "none" : "custom";
   return (
-    <div>
-      <h3>Fiche du bloc</h3>
-
+    <div className="dy-inspector">
+      <div className="dy-insp-identity">
       <div className="dy-field">
         <label>Nom</label>
         <input
@@ -55,31 +64,40 @@ export function Inspector({
 
       <div className="dy-field">
         <label>Couleur</label>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-          {palette.map((c) => (
-            <button
-              key={c}
-              onClick={() => onChange((h) => ({ ...h, color: c }))}
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: "50%",
-                background: c,
-                border: c === hotspot.color ? "2px solid var(--dy-ink)" : "1px solid transparent",
-                cursor: "pointer",
-              }}
-              aria-label={c}
+        {hotspot.groupId ? (
+          <p style={{ fontSize: 12, margin: 0, display: "flex", alignItems: "center", gap: 6 }}>
+            <span
+              style={{ width: 14, height: 14, borderRadius: "50%", background: hotspot.color, display: "inline-block" }}
             />
-          ))}
-          <input
-            type="color"
-            value={hotspot.color}
-            onChange={(e) => {
-              const v = e.target.value;
-              onChange((h) => ({ ...h, color: v }));
-            }}
-          />
-        </div>
+            Héritée du groupe — retire-le du groupe pour choisir une couleur propre.
+          </p>
+        ) : (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+            {palette.map((c) => (
+              <button
+                key={c}
+                onClick={() => onChange((h) => ({ ...h, color: c }))}
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: "50%",
+                  background: c,
+                  border: c === hotspot.color ? "2px solid var(--dy-ink)" : "1px solid transparent",
+                  cursor: "pointer",
+                }}
+                aria-label={c}
+              />
+            ))}
+            <input
+              type="color"
+              value={hotspot.color}
+              onChange={(e) => {
+                const v = e.target.value;
+                onChange((h) => ({ ...h, color: v }));
+              }}
+            />
+          </div>
+        )}
       </div>
 
       <div className="dy-field">
@@ -88,7 +106,8 @@ export function Inspector({
           value={hotspot.groupId ?? ""}
           onChange={(e) => {
             const v = e.target.value || null;
-            onChange((h) => ({ ...h, groupId: v }));
+            const targetGroup = groups.find((g) => g.id === v);
+            onChange((h) => ({ ...h, groupId: v, color: targetGroup ? targetGroup.color : h.color }));
           }}
         >
           <option value="">— aucun —</option>
@@ -99,7 +118,9 @@ export function Inspector({
           ))}
         </select>
       </div>
+      </div>
 
+      <Section title="Sélection & empilement" defaultOpen>
       <div className="dy-field">
         <label>Zones cliquables ({hotspot.areas.length})</label>
         {hotspot.areas.map((a, i) => (
@@ -153,8 +174,70 @@ export function Inspector({
           </button>
         </div>
       </div>
+      </Section>
 
-      <div className="dy-field">
+      <Section title="Presets de style" defaultOpen>
+        <p style={{ fontSize: 11, color: "var(--dy-muted)", margin: "0 0 8px" }}>
+          Un jeu de paramètres prêt à l'emploi — clique pour l'appliquer, puis affine chaque
+          réglage dans « Apparence » ci-dessous si besoin.
+        </p>
+        <PresetGrid
+          style={hotspot.style}
+          onApply={(patch) =>
+            onChange((h) => ({
+              ...h,
+              // an empty patch ("Défaut du projet") clears every override rather
+              // than merging as a no-op; any other preset merges its fields in.
+              style: Object.keys(patch).length === 0 ? {} : { ...h.style, ...patch },
+            }))
+          }
+        />
+      </Section>
+
+      <Section title="Apparence" defaultOpen>
+        <StyleOverridePanel
+          style={hotspot.style}
+          interaction={interaction}
+          onChange={(patch) => onChange((h) => ({ ...h, style: { ...h.style, ...patch } }))}
+          onReset={(key) =>
+            onChange((h) => {
+              const next = { ...h.style };
+              delete next[key];
+              return { ...h, style: next };
+            })
+          }
+        />
+      </Section>
+
+      <Section title="CSS">
+        <p style={{ fontSize: 11, color: "var(--dy-muted)", margin: "0 0 6px" }}>
+          Ce que ce bloc applique réellement, généré à partir des réglages ci-dessus — se met à
+          jour en direct.
+        </p>
+        <CssCodePreview hotspotId={hotspot.id} style={effectiveHotspotStyle(interaction, hotspot.style)} />
+        <div className="dy-field" style={{ marginTop: 10 }}>
+          <label>CSS avancé (bloc par bloc)</label>
+          <p style={{ fontSize: 11, color: "var(--dy-muted)", margin: "0 0 6px" }}>
+            Tout ce qui n'est pas couvert ci-dessus : n'importe quelle propriété CSS, sur ce bloc
+            uniquement. Utilise <code>&amp;</code> pour cibler ses propres états, ex.{" "}
+            <code>&amp;.hovered {"{"} stroke-width: 2; {"}"}</code> ou{" "}
+            <code>&amp;.selected {"{"} animation: spin 3s linear infinite; {"}"}</code>.
+          </p>
+          <textarea
+            rows={5}
+            value={hotspot.customCss}
+            onChange={(e) => {
+              const v = e.target.value;
+              onChange((h) => ({ ...h, customCss: v }));
+            }}
+            placeholder={"&.hovered {\n  stroke-width: 2;\n}"}
+            className="dy-code-textarea"
+          />
+        </div>
+      </Section>
+
+      <Section title="Connecteur">
+        <div className="dy-field">
         <label>Connecteur</label>
         <select
           value={connectorMode}
@@ -224,23 +307,136 @@ export function Inspector({
             <button className="dy-btn" onClick={onStartConnectorShape} style={{ width: "100%" }}>
               {hotspot.connector.toShape ? "Redessiner la zone d'arrivée" : "+ Zone qui s'éclaire à l'arrivée"}
             </button>
+
+            <details style={{ marginTop: 8 }}>
+              <summary style={{ fontSize: 12, cursor: "pointer" }}>Réglages fins du connecteur</summary>
+              <div style={{ marginTop: 6 }}>
+                <ConnectorNumberField
+                  label="Épaisseur du trait"
+                  value={hotspot.connector.strokeWidth}
+                  min={0.1}
+                  max={2}
+                  step={0.1}
+                  onChange={(v) =>
+                    onChange((h) => (h.connector ? { ...h, connector: { ...h.connector, strokeWidth: v } } : h))
+                  }
+                  onReset={() =>
+                    onChange((h) => {
+                      if (!h.connector) return h;
+                      const { strokeWidth: _s, ...rest } = h.connector;
+                      return { ...h, connector: rest as Hotspot["connector"] };
+                    })
+                  }
+                />
+                <ConnectorNumberField
+                  label="Rayon du point animé"
+                  value={hotspot.connector.dotRadius}
+                  min={0.2}
+                  max={2}
+                  step={0.1}
+                  onChange={(v) =>
+                    onChange((h) => (h.connector ? { ...h, connector: { ...h.connector, dotRadius: v } } : h))
+                  }
+                  onReset={() =>
+                    onChange((h) => {
+                      if (!h.connector) return h;
+                      const { dotRadius: _d, ...rest } = h.connector;
+                      return { ...h, connector: rest as Hotspot["connector"] };
+                    })
+                  }
+                />
+                <ConnectorNumberField
+                  label="Vitesse du point (ms)"
+                  value={hotspot.connector.dotSpeedMs}
+                  min={400}
+                  max={4000}
+                  step={100}
+                  onChange={(v) =>
+                    onChange((h) => (h.connector ? { ...h, connector: { ...h.connector, dotSpeedMs: v } } : h))
+                  }
+                  onReset={() =>
+                    onChange((h) => {
+                      if (!h.connector) return h;
+                      const { dotSpeedMs: _sp, ...rest } = h.connector;
+                      return { ...h, connector: rest as Hotspot["connector"] };
+                    })
+                  }
+                />
+                <ConnectorNumberField
+                  label="Vitesse de l'onde (ms)"
+                  value={hotspot.connector.ringSpeedMs}
+                  min={600}
+                  max={4000}
+                  step={100}
+                  onChange={(v) =>
+                    onChange((h) => (h.connector ? { ...h, connector: { ...h.connector, ringSpeedMs: v } } : h))
+                  }
+                  onReset={() =>
+                    onChange((h) => {
+                      if (!h.connector) return h;
+                      const { ringSpeedMs: _r, ...rest } = h.connector;
+                      return { ...h, connector: rest as Hotspot["connector"] };
+                    })
+                  }
+                />
+                <div className="dy-field">
+                  <label>Couleur{hotspot.connector.color === undefined ? " — celle du bloc" : ""}</label>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input
+                      type="color"
+                      value={hotspot.connector.color ?? hotspot.color}
+                      onChange={(e) =>
+                        onChange((h) =>
+                          h.connector ? { ...h, connector: { ...h.connector, color: e.target.value } } : h,
+                        )
+                      }
+                    />
+                    {hotspot.connector.color !== undefined && (
+                      <button
+                        className="dy-btn"
+                        onClick={() =>
+                          onChange((h) => {
+                            if (!h.connector) return h;
+                            const { color: _c, ...rest } = h.connector;
+                            return { ...h, connector: rest as Hotspot["connector"] };
+                          })
+                        }
+                      >
+                        ↺
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </details>
           </div>
         )}
-      </div>
+        </div>
+      </Section>
 
-      <StyleOverridePanel
-        style={hotspot.style}
-        interaction={interaction}
-        onChange={(patch) => onChange((h) => ({ ...h, style: { ...h.style, ...patch } }))}
-        onReset={(key) =>
-          onChange((h) => {
-            const next = { ...h.style };
-            delete next[key];
-            return { ...h, style: next };
-          })
-        }
-      />
+      <Section title={`Objets liés${linkedLines.length ? ` (${linkedLines.length})` : ""}`}>
+        {linkedLines.length === 0 ? (
+          <p style={{ fontSize: 12, color: "var(--dy-muted)", margin: 0 }}>
+            Aucun objet libre (ligne, texte…) ne pointe vers ce bloc pour l'instant.
+          </p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {linkedLines.map((line) => {
+              const isFrom = line.kind === "line" && line.fromHotspotId === hotspot.id;
+              return (
+                <div key={line.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+                  <span style={{ flex: 1 }}>／ Ligne — {isFrom ? "point de départ" : "point d'arrivée"}</span>
+                  <button className="dy-btn" onClick={() => onSelectObject(line.id)}>
+                    Voir
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Section>
 
+      <Section title="Contenu">
       <div className="dy-field">
         <label>Explorer aussi</label>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -327,9 +523,110 @@ export function Inspector({
           onChange={(tools) => onChange((h) => ({ ...h, content: { ...h.content, tools } }))}
         />
       </div>
+      </Section>
 
       <button className="dy-btn" onClick={onDelete} style={{ width: "100%" }}>
         Supprimer ce bloc
+      </button>
+    </div>
+  );
+}
+
+function PresetGrid({
+  style,
+  onApply,
+}: {
+  style: HotspotStyleOverride;
+  onApply: (patch: HotspotStyleOverride) => void;
+}) {
+  function matches(patch: HotspotStyleOverride) {
+    const keys = Object.keys(patch) as (keyof HotspotStyleOverride)[];
+    if (keys.length === 0) return Object.keys(style).length === 0;
+    return keys.every((k) => style[k] === patch[k]);
+  }
+
+  return (
+    <div className="dy-preset-grid">
+      {STYLE_PRESETS.map((preset) => {
+        const active = matches(preset.patch);
+        const showOutline = preset.patch.showOutline ?? true;
+        const radius = preset.patch.spotlightCornerRadius ?? 3;
+        const tint = preset.patch.hoverTintOpacity ?? 0.18;
+        const pulsing = preset.patch.pulseEnabled === true;
+        return (
+          <button
+            key={preset.id}
+            type="button"
+            className={`dy-preset-card${active ? " active" : ""}`}
+            title={preset.hint}
+            onClick={() => onApply(preset.patch)}
+          >
+            <span
+              className="dy-preset-swatch"
+              style={{
+                borderStyle: showOutline ? "dashed" : "none",
+                borderWidth: showOutline ? Math.max(1, (preset.patch.selectionStrokeWidth ?? 0.9) * 2) : 0,
+                borderRadius: Math.max(2, radius * 2),
+                background: `color-mix(in srgb, var(--dy-ink) ${Math.round(tint * 100)}%, transparent)`,
+              }}
+            >
+              {pulsing && <span className="dy-preset-pulse-dot" />}
+            </span>
+            <span className="dy-preset-label">{preset.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function CssCodePreview({
+  hotspotId,
+  style,
+}: {
+  hotspotId: string;
+  style: ReturnType<typeof effectiveHotspotStyle>;
+}) {
+  const [copied, setCopied] = useState(false);
+  const scope = `hs-${hotspotId}`;
+  const lines = [
+    `.${scope} {`,
+    `  --dy-dash: ${style.showOutline ? style.dashPattern : "none"};`,
+    `  --dy-selection-stroke-width: ${style.selectionStrokeWidth};`,
+    `  --dy-corner-radius: ${style.spotlightCornerRadius};`,
+    `  --dy-hover-tint: ${style.hoverTintOpacity};`,
+    `  outline: ${style.showOutline ? "dashed" : "none"};`,
+    `}`,
+  ];
+  if (style.pulseEnabled) {
+    lines.push(
+      "",
+      `.${scope} .dy-pulse {`,
+      `  --dy-pulse-min: ${style.pulseMinRadius};`,
+      `  --dy-pulse-max: ${style.pulseMaxRadius};`,
+      `  animation-duration: ${style.pulseSpeedMs}ms;`,
+      `}`,
+    );
+  }
+  const css = lines.join("\n");
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(css);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      // clipboard unavailable (e.g. insecure context) — silently ignore
+    }
+  }
+
+  return (
+    <div className="dy-insp-code-wrap">
+      <pre className="dy-insp-code">
+        <code>{css}</code>
+      </pre>
+      <button type="button" className="dy-btn dy-insp-code-copy" onClick={copy}>
+        {copied ? "Copié ✓" : "Copier"}
       </button>
     </div>
   );
@@ -623,6 +920,50 @@ function StyleOverridePanel({
           />
         </>
       )}
+    </div>
+  );
+}
+
+function ConnectorNumberField({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  onReset,
+}: {
+  label: string;
+  value: number | undefined;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+  onReset: () => void;
+}) {
+  const fallback = (min + max) / 2;
+  const isOverridden = value !== undefined;
+  return (
+    <div className="dy-field">
+      <label>
+        {label} ({value ?? fallback}){isOverridden ? "" : " — global"}
+      </label>
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value ?? fallback}
+          style={{ flex: 1 }}
+          onChange={(e) => onChange(Number(e.target.value))}
+        />
+        {isOverridden && (
+          <button className="dy-btn" onClick={onReset} aria-label={`Réinitialiser ${label}`}>
+            ↺
+          </button>
+        )}
+      </div>
     </div>
   );
 }

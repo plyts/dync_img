@@ -1,17 +1,23 @@
 import { useState } from "react";
 import type { HotspotContent, Project } from "../../types";
 import {
+  AI_PROVIDERS,
   buildContentDraftUserPrompt,
   buildHotspotDetectionUserPrompt,
   CONTENT_DRAFT_SYSTEM_PROMPT,
   detectHotspotsFromImage,
   draftHotspotContent,
+  formatHotspotNotesMarkdown,
   HOTSPOT_DETECTION_SYSTEM_PROMPT,
+  type AIProviderId,
   type DetectedHotspot,
+  type DraftedHotspotContent,
   type PercentRect,
 } from "../../lib/ai";
 
-const KEY_STORAGE = "dyimg.anthropic-api-key";
+const KEY_STORAGE_PREFIX = "dyimg.api-key.";
+const BASE_URL_STORAGE = "dyimg.custom-base-url";
+const PROVIDER_STORAGE = "dyimg.ai-provider";
 
 interface AIAssistModalProps {
   project: Project;
@@ -20,7 +26,10 @@ interface AIAssistModalProps {
   onClearRegion: () => void;
   onClose: () => void;
   onImportDetected: (hotspots: DetectedHotspot[]) => void;
-  onApplyContent: (content: HotspotContent) => void;
+  /** `notesMarkdown` is the ready-to-store Markdown for the block's
+   *  companion "en savoir plus" note marker (already formatted for the
+   *  app's own renderer) — empty when the AI returned no links/tip. */
+  onApplyContent: (content: HotspotContent, notesMarkdown: string) => void;
 }
 
 export function AIAssistModal({
@@ -32,18 +41,34 @@ export function AIAssistModal({
   onImportDetected,
   onApplyContent,
 }: AIAssistModalProps) {
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem(KEY_STORAGE) ?? "");
-  const [remember, setRemember] = useState(Boolean(localStorage.getItem(KEY_STORAGE)));
+  const [providerId, setProviderId] = useState<AIProviderId>(
+    () => (localStorage.getItem(PROVIDER_STORAGE) as AIProviderId) || "anthropic",
+  );
+  const provider = AI_PROVIDERS[providerId];
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem(KEY_STORAGE_PREFIX + providerId) ?? "");
+  const [remember, setRemember] = useState(Boolean(localStorage.getItem(KEY_STORAGE_PREFIX + providerId)));
+  const [model, setModel] = useState(provider.defaultModel);
+  const [baseUrl, setBaseUrl] = useState(() => localStorage.getItem(BASE_URL_STORAGE) || provider.baseUrl);
   const [tab, setTab] = useState<"detect" | "content">(initialRegion || !selectedLabel ? "detect" : "content");
   const [extra, setExtra] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detected, setDetected] = useState<DetectedHotspot[] | null>(null);
-  const [drafted, setDrafted] = useState<HotspotContent | null>(null);
+  const [drafted, setDrafted] = useState<DraftedHotspotContent | null>(null);
+
+  function selectProvider(id: AIProviderId) {
+    setProviderId(id);
+    localStorage.setItem(PROVIDER_STORAGE, id);
+    setApiKey(localStorage.getItem(KEY_STORAGE_PREFIX + id) ?? "");
+    setRemember(Boolean(localStorage.getItem(KEY_STORAGE_PREFIX + id)));
+    setModel(AI_PROVIDERS[id].defaultModel);
+    setBaseUrl(id === "custom-openai" ? localStorage.getItem(BASE_URL_STORAGE) || AI_PROVIDERS[id].baseUrl : AI_PROVIDERS[id].baseUrl);
+  }
 
   function persistKey() {
-    if (remember) localStorage.setItem(KEY_STORAGE, apiKey);
-    else localStorage.removeItem(KEY_STORAGE);
+    if (remember) localStorage.setItem(KEY_STORAGE_PREFIX + providerId, apiKey);
+    else localStorage.removeItem(KEY_STORAGE_PREFIX + providerId);
+    if (providerId === "custom-openai") localStorage.setItem(BASE_URL_STORAGE, baseUrl);
   }
 
   async function runDetect() {
@@ -52,9 +77,11 @@ export function AIAssistModal({
     setDetected(null);
     try {
       persistKey();
-      const result = await detectHotspotsFromImage(apiKey, project.image.src, {
+      const result = await detectHotspotsFromImage(provider, apiKey, project.image.src, {
         extraInstructions: extra,
         region: initialRegion ?? undefined,
+        model,
+        baseUrlOverride: providerId === "custom-openai" ? baseUrl : undefined,
       });
       setDetected(result);
     } catch (err) {
@@ -72,7 +99,14 @@ export function AIAssistModal({
     try {
       persistKey();
       const context = `Schéma "${project.name}". Autres blocs : ${project.hotspots.map((h) => h.label).join(", ") || "aucun"}.`;
-      const result = await draftHotspotContent(apiKey, selectedLabel, context);
+      const result = await draftHotspotContent(
+        provider,
+        apiKey,
+        selectedLabel,
+        context,
+        model,
+        providerId === "custom-openai" ? baseUrl : undefined,
+      );
       setDrafted(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -86,17 +120,29 @@ export function AIAssistModal({
       <div className="dy-modal" onClick={(e) => e.stopPropagation()}>
         <h3>Assistant IA (optionnel)</h3>
         <p style={{ fontSize: 13, color: "var(--dy-muted)" }}>
-          Utilise ta propre clé API Anthropic. Elle n'est jamais envoyée ailleurs qu'à
-          api.anthropic.com et reste dans ce navigateur.
+          Utilise ta propre clé API. Elle n'est jamais envoyée ailleurs qu'au fournisseur choisi
+          et reste dans ce navigateur.
         </p>
 
         <div className="dy-field">
-          <label>Clé API Anthropic</label>
+          <label>Fournisseur</label>
+          <select value={providerId} onChange={(e) => selectProvider(e.target.value as AIProviderId)}>
+            {Object.values(AI_PROVIDERS).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+          <p style={{ fontSize: 11, color: "var(--dy-muted)", margin: "2px 0 0" }}>{provider.docsHint}</p>
+        </div>
+
+        <div className="dy-field">
+          <label>Clé API</label>
           <input
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
-            placeholder="sk-ant-..."
+            placeholder={providerId === "anthropic" ? "sk-ant-..." : providerId === "openai" ? "sk-..." : "clé…"}
           />
           <label style={{ textTransform: "none", display: "flex", gap: 6, alignItems: "center" }}>
             <input
@@ -106,6 +152,23 @@ export function AIAssistModal({
             />
             Se souvenir de la clé sur cet appareil (localStorage)
           </label>
+        </div>
+
+        {providerId === "custom-openai" && (
+          <div className="dy-field">
+            <label>URL de l'API (compatible OpenAI)</label>
+            <input
+              type="text"
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              placeholder="https://.../chat/completions"
+            />
+          </div>
+        )}
+
+        <div className="dy-field">
+          <label>Modèle</label>
+          <input type="text" value={model} onChange={(e) => setModel(e.target.value)} />
         </div>
 
         <div className="dy-mode-switch" style={{ marginBottom: 12 }}>
@@ -208,11 +271,29 @@ export function AIAssistModal({
             </button>
             {drafted && (
               <div style={{ marginTop: 12 }}>
-                <p className="dy-summary">{drafted.summary}</p>
+                <p className="dy-summary">{drafted.content.summary}</p>
+                {(drafted.notes.links.length > 0 || drafted.notes.tip) && (
+                  <div className="dy-field">
+                    <label>Notes générées (fenêtre « en savoir plus » du bloc)</label>
+                    {drafted.notes.links.length > 0 && (
+                      <ul style={{ margin: "4px 0", paddingLeft: 18, fontSize: 12 }}>
+                        {drafted.notes.links.map((l, i) => (
+                          <li key={i}>
+                            <a href={l.url} target="_blank" rel="noopener noreferrer">
+                              {l.label}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {drafted.notes.tip && <p style={{ fontSize: 12, color: "var(--dy-muted)" }}>{drafted.notes.tip}</p>}
+                  </div>
+                )}
                 <button
                   className="dy-btn primary"
                   onClick={() => {
-                    onApplyContent(drafted);
+                    const notesMarkdown = formatHotspotNotesMarkdown(selectedLabel ?? "", drafted.notes);
+                    onApplyContent(drafted.content, notesMarkdown);
                     onClose();
                   }}
                 >

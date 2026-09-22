@@ -1,4 +1,4 @@
-import type { HotspotShape, HotspotStyleOverride, InteractionSettings, Point } from "../types";
+import type { Hotspot, HotspotShape, HotspotStyleOverride, InteractionSettings, LineObject, Point } from "../types";
 
 /**
  * All coordinates in this module are percentages (0-100) of the image box.
@@ -203,6 +203,18 @@ export function connectorPathD(from: Point, to: Point, curved: boolean): string 
   const cx = mx + nx * bend;
   const cy = my + ny * bend;
   return `M ${from.x} ${from.y} Q ${cx} ${cy} ${to.x} ${to.y}`;
+}
+
+/** A line object's endpoint is either a free point or, when anchored,
+ *  follows that hotspot's current anchor — resolved at render time so it
+ *  always reflects the block's latest position. */
+export function resolveLineEndpoint(line: LineObject, which: "from" | "to", hotspots: Hotspot[]): Point {
+  const hotspotId = which === "from" ? line.fromHotspotId : line.toHotspotId;
+  if (hotspotId) {
+    const h = hotspots.find((x) => x.id === hotspotId);
+    if (h) return h.anchor;
+  }
+  return which === "from" ? line.from : line.to;
 }
 
 export function polygonSignedArea(points: Point[]): number {
